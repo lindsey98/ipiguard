@@ -39,7 +39,8 @@
 
 ## 📢 News
 
-- 🎉 Our paper **"IPIGuard: A Novel Tool Dependency Graph-Based Defense Against Indirect Prompt Injection in LLM Agents"** has been **accepted to EMNLP 2025 Main Conference**!  
+- [2025.09.15] **IPIGuard** is selected for **Oral presentation** at EMNLP 2025
+- [2025.08.21]🎉 Our paper **"IPIGuard: A Novel Tool Dependency Graph-Based Defense Against Indirect Prompt Injection in LLM Agents"** has been **accepted to EMNLP 2025 Main Conference**!  
 
 
 ## 🔧 Installation

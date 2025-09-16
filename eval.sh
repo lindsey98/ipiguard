@@ -1,7 +1,4 @@
 #!/bin/bash
-export OPENAI_API_KEY='<your_api_key>'
-export OPENAI_BASE_URL='<your_base_url>'
-
 agent_model="gpt-4o-mini-2024-07-18"
 attack_name="important_instructions"
 defense_name="ipiguard"
