@@ -24,6 +24,8 @@ class ModelsEnum(StrEnum):
     """Claude 3.5 Sonnet October"""
     CLAUDE_3_7_SONNET_20250219 = "claude-3-7-sonnet-20250219"
     """Claude 3.7 Sonnet"""
+    CLAUDE_SONNET_4_5_20250929 = "claude-sonnet-4-5-20250929"
+    """Claude Sonnet 4.5"""
     CLAUDE_3_5_HAIKU_20241022 = "claude-3-5-haiku-20241022"
     """Claude 3.5 Haiku October"""
     CLAUDE_3_HAIKU_20240307 = "claude-3-haiku-20240307"
@@ -85,6 +87,7 @@ MODEL_PROVIDERS = {
     ModelsEnum.CLAUDE_3_5_HAIKU_20241022: "anthropic",
     ModelsEnum.CLAUDE_3_HAIKU_20240307: "anthropic",
     ModelsEnum.CLAUDE_3_7_SONNET_20250219: "anthropic",
+    ModelsEnum.CLAUDE_SONNET_4_5_20250929: "anthropic",
     ModelsEnum.COMMAND_R_PLUS: "cohere",
     ModelsEnum.COMMAND_R: "cohere",
     ModelsEnum.MISTRALAI_MIXTRAL_8X7B_INSTRUCT_V0_1: "together",
@@ -122,6 +125,7 @@ MODEL_NAMES = {
     "claude-3-5-haiku-20241022": "Claude",
     "claude-3-haiku-20240307": "Claude",
     "claude-3-7-sonnet-20250219": "Claude",
+    "claude-sonnet-4-5-20250929": "Claude",
     "command-r-plus": "Command R+",
     "command-r": "Command R",
     "mistralai/Mixtral-8x7B-Instruct-v0.1": "Mixtral",

@@ -40,7 +40,23 @@
 ## 📢 News
 
 - [2025.09.15] **IPIGuard** is selected for **Oral presentation** at EMNLP 2025
-- [2025.08.21]🎉 Our paper **"IPIGuard: A Novel Tool Dependency Graph-Based Defense Against Indirect Prompt Injection in LLM Agents"** has been **accepted to EMNLP 2025 Main Conference**!  
+- [2025.08.21]🎉 Our paper **"IPIGuard: A Novel Tool Dependency Graph-Based Defense Against Indirect Prompt Injection in LLM Agents"** has been **accepted to EMNLP 2025 Main Conference**!
+
+
+## 📖 Overview
+
+IPIGuard evaluates LLM agents against **indirect prompt injection (IPI)** attacks on top of the
+[AgentDojo](https://github.com/ethz-spylab/agentdojo) benchmark. Every evaluation is defined by three
+choices:
+
+- **Agent model** — the LLM that drives the agent (e.g. `claude-sonnet-4-5-20250929`, `gpt-4o-mini-2024-07-18`).
+- **Attack** — the adversarial content injected into tool outputs (e.g. `important_instructions`), only
+  active in `under_attack` mode.
+- **Defense** — the defense strategy applied to the agent. Use `ipiguard` for the proposed defense, or
+  `None` to run the **original model** with no defense.
+
+This README walks through the four combinations of *(attack on / off)* × *(IPIGuard / original model)* using
+Anthropic's **`claude-sonnet-4-5-20250929`** as the agent model.
 
 
 ## 🔧 Installation
@@ -49,50 +65,148 @@ We recommend using Python ≥3.10.
 
 ```bash
 # git clone
-git clone https://github.com/Greysahy/ipiguard.git
+git clone https://github.com/lindsey98/ipiguard.git
 cd ipiguard
 
 # create conda environment
 conda create -n ipiguard python=3.10
 conda activate ipiguard
 
-# install agentdojo
+# install agentdojo (editable)
 cd agentdojo
 pip install -e .
+cd ..
 ```
 
----
 
-## 🚀 Quick Start
+## 🔑 API Keys
 
-### 1. Set Your OpenAI API Key in eval.sh
+Set the key for the provider whose model you want to run.
+
+**Anthropic (used by the examples below):**
 
 ```bash
-export OPENAI_API_KEY='<your_api_key>'
-export OPENAI_BASE_URL='<your_base_url>'
+export ANTHROPIC_API_KEY='<your_anthropic_api_key>'
+# Optional: override the endpoint (defaults to https://api.anthropic.com/v1/).
+# export ANTHROPIC_BASE_URL='<your_base_url>'
 ```
 
-### 2. Run Evaluation
-We provide a ready-to-use shell script for running evaluations with specific agent, attack, and defense configurations. You can modify the arguments to evaluate different settings. 
+> **Note on the IPIGuard defense with Claude models.** IPIGuard builds and traverses a tool-dependency
+> graph through the OpenAI chat-completions interface. For Claude agent models, IPIGuard talks to
+> Anthropic's **OpenAI-compatible endpoint** using your `ANTHROPIC_API_KEY` (and `ANTHROPIC_BASE_URL` if
+> set). No extra configuration is required — just set `ANTHROPIC_API_KEY`.
 
-To run the script:
+**OpenAI (if you instead use a `gpt-*` agent model):**
+
+```bash
+export OPENAI_API_KEY='<your_openai_api_key>'
+export OPENAI_BASE_URL='<your_base_url>'   # keep default unless using a proxy/private deployment
+```
+
+
+## 🚀 How to Run
+
+Evaluations are launched with `run/eval.py`. The four scenarios differ only in the `--mode`,
+`--attack_name`, and `--defense_name` arguments:
+
+| Scenario                                  | `--mode`       | `--attack_name`          | `--defense_name` |
+|-------------------------------------------|----------------|--------------------------|------------------|
+| Important Instr. attack **+ IPIGuard**    | `under_attack` | `important_instructions` | `ipiguard`       |
+| No attack **+ IPIGuard**                  | `benign`       | `important_instructions` | `ipiguard`       |
+| Important Instr. attack **+ original model** | `under_attack` | `important_instructions` | `None`           |
+| No attack **+ original model**            | `benign`       | `important_instructions` | `None`           |
+
+In `benign` mode the attack is not injected, so `--attack_name` is ignored for utility — any valid value
+(e.g. `important_instructions`) is fine. `--defense_name None` runs the **original model** with no defense.
+
+All examples below use the agent model **`anthropic:claude-sonnet-4-5-20250929`** and the `travel` suite.
+Swap `--suite_name` for `workspace`, `slack`, `banking`, or `all` as needed.
+
+### 1) Important Instr. attack + IPIGuard defense
+
+```bash
+python3 run/eval.py \
+    --suite_name travel \
+    --agent_model claude-sonnet-4-5-20250929 \
+    --attack_name important_instructions \
+    --defense_name ipiguard \
+    --mode under_attack \
+    --output_dir evaluation_results/attack_ipiguard \
+    --uid 0 --iid 0
+```
+
+### 2) No attack + IPIGuard defense
+
+```bash
+python3 run/eval.py \
+    --suite_name travel \
+    --agent_model claude-sonnet-4-5-20250929 \
+    --attack_name important_instructions \
+    --defense_name ipiguard \
+    --mode benign \
+    --output_dir evaluation_results/benign_ipiguard \
+    --uid 0 --iid 0
+```
+
+### 3) Important Instr. attack + original model (no defense)
+
+```bash
+python3 run/eval.py \
+    --suite_name travel \
+    --agent_model claude-sonnet-4-5-20250929 \
+    --attack_name important_instructions \
+    --defense_name None \
+    --mode under_attack \
+    --output_dir evaluation_results/attack_original \
+    --uid 0 --iid 0
+```
+
+### 4) No attack + original model (no defense)
+
+```bash
+python3 run/eval.py \
+    --suite_name travel \
+    --agent_model claude-sonnet-4-5-20250929 \
+    --attack_name important_instructions \
+    --defense_name None \
+    --mode benign \
+    --output_dir evaluation_results/benign_original \
+    --uid 0 --iid 0
+```
+
+### Using the shell script
+
+`eval.sh` wraps a single configuration with an auto-generated, timestamped `output_dir`. Edit the variables
+at the top and run it:
+
+```bash
+# inside eval.sh
+agent_model="claude-sonnet-4-5-20250929"
+attack_name="important_instructions"
+defense_name="ipiguard"          # or "None" for the original model
+suite_name="travel"
+mode="under_attack"              # or "benign"
+```
 
 ```bash
 bash eval.sh
 ```
 
-Argument        | Description
-----------------|--------------------------------------------------------------
-OPENAI_API_KEY  | Your OpenAI API key, required to access the model.
-OPENAI_BASE_URL | Base URL of the OpenAI API. Keep default unless using a proxy or private deployment.
-agent_model     | The agent model used for evaluation (e.g., gpt-4o-mini-2024-07-18).
-attack_name     | The adversarial attack type to simulate (e.g., important_instructions).
-defense_name    | The defense strategy applied during evaluation (e.g., ipiguard).
-suite_name      | The task suite/domain being evaluated (e.g., travel, workspace, slack, banking).
-mode            | Running mode: benign → Standard tasks without attacks; attack → Adversarial tasks with injected attacks  
-output_dir      | Directory to store evaluation results.
---uid / --iid   | User task ID and injection attack ID, used for resuming evaluation after interruption.
----
+### Argument reference
+
+| Argument          | Description                                                                                       |
+|-------------------|---------------------------------------------------------------------------------------------------|
+| `--agent_model`   | Agent model used for evaluation (e.g. `claude-sonnet-4-5-20250929`, `gpt-4o-mini-2024-07-18`).     |
+| `--attack_name`   | Adversarial attack to simulate (e.g. `important_instructions`). Ignored in `benign` mode.          |
+| `--defense_name`  | Defense strategy: `ipiguard` for the proposed defense, or `None` for the original (undefended) model. |
+| `--suite_name`    | Task suite/domain: `travel`, `workspace`, `slack`, `banking`, or `all`.                            |
+| `--mode`          | `benign` → standard tasks without attacks; `under_attack` → adversarial tasks with injected attacks. |
+| `--output_dir`    | Directory to store evaluation results (JSON logs + per-suite ASR/Utility).                          |
+| `--uid` / `--iid` | User-task ID and injection-task ID to resume from after an interruption.                            |
+
+Each run prints and saves **ASR** (Attack Success Rate ↓, lower is better) and **Utility** (task success ↑,
+higher is better) per suite and overall.
+
 
 ## 📊 Results
 
@@ -105,9 +219,8 @@ output_dir      | Directory to store evaluation results.
 | Important Instr. | 0.83 / 65.00     | 0.00 / 49.52     | 0.00 / 57.14     | 1.39 / 49.31     | 0.64 / 57.07     |
 | Average          | 0.31 / 67.71     | 0.71 / 57.86     | 0.00 / 61.07     | 1.74 / 48.44     | 0.69 / 58.77     |
 
-More results and ablations are available in the [paper](link_to_paper).
+More results and ablations are available in the [paper](https://arxiv.org/abs/2508.15310).
 
----
 
 ## 📌 Citation
 
@@ -115,16 +228,15 @@ If you use this code or find our work helpful, please cite:
 
 ```bibtex
 @misc{an2025ipiguardnoveltooldependency,
-      title={IPIGuard: A Novel Tool Dependency Graph-Based Defense Against Indirect Prompt Injection in LLM Agents}, 
+      title={IPIGuard: A Novel Tool Dependency Graph-Based Defense Against Indirect Prompt Injection in LLM Agents},
       author={Hengyu An and Jinghuai Zhang and Tianyu Du and Chunyi Zhou and Qingming Li and Tao Lin and Shouling Ji},
       year={2025},
       eprint={2508.15310},
       archivePrefix={arXiv},
       primaryClass={cs.CR},
-      url={https://arxiv.org/abs/2508.15310}, 
+      url={https://arxiv.org/abs/2508.15310},
 }
 ```
----
 
 
 ## 🏷️ License

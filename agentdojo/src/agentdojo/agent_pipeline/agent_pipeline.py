@@ -180,12 +180,23 @@ class AgentPipeline(BasePipelineElement):
             return pipeline
 
         if config.defense == "ipiguard":
-            client = llm.client
             if "gpt" in config.llm or "Qwen" in config.llm or "llama" in config.llm:
+                construct_llm = OpenAIConstructLLM(llm.client, config.llm)
+                traverse_llm = OpenAITraverseLLM(llm.client, config.llm)
+            elif "claude" in config.llm:
+                # IPIGuard's tool-dependency-graph construction and traversal are
+                # implemented against the OpenAI chat-completions interface.
+                # Anthropic exposes an OpenAI-compatible endpoint, so we build an
+                # OpenAI client that targets it and reuse the same construct/traverse
+                # LLMs for Claude models.
+                client = openai.OpenAI(
+                    api_key=os.getenv("ANTHROPIC_API_KEY"),
+                    base_url=os.getenv("ANTHROPIC_BASE_URL", "https://api.anthropic.com/v1/"),
+                )
                 construct_llm = OpenAIConstructLLM(client, config.llm)
                 traverse_llm = OpenAITraverseLLM(client, config.llm)
             else:
-                raise ValueError("Dag defense is not yet supported for the model: {config.llm}, try OpenAI/Anthropic's models.")
+                raise ValueError(f"Dag defense is not yet supported for the model: {config.llm}, try OpenAI/Anthropic's models.")
 
             executor = DagToolsExecutor(traverse_llm)
             tools_loop = DagToolsExecutionLoop(executor)

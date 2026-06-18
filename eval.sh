@@ -1,9 +1,9 @@
 #!/bin/bash
-agent_model="gpt-4o-mini-2024-07-18"
+agent_model="claude-sonnet-4-5-20250929"
 attack_name="important_instructions"
-defense_name="ipiguard"
+defense_name="ipiguard"          # use "None" to run the original model (no defense)
 suite_name="travel"
-mode="benign"
+mode="under_attack"              # "benign" for no-attack runs
 
 output_dir="evaluation_results/$(echo $suite_name | tr '/' '_')/$(echo $agent_model | tr '/' '_')/$(echo $mode | tr '/' '_')_$(echo $attack_name | tr ' ' '_')_$(echo $defense_name | tr ' ' '_')_$(date +%Y%m%d_%H%M%S)"
 
