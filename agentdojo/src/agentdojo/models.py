@@ -40,6 +40,8 @@ class ModelsEnum(StrEnum):
     """Llama 3"""
     LLAMA_3_3 = "llama-3.3-70b-instruct"
     """Llama 3.3"""
+    LLAMA_3_3_70B_LOCAL = "Llama-3.3-70B-Instruct"
+    """Llama 3.3 70B served locally via an OpenAI-compatible server"""
     LLAMA_3_1 = "meta-llama/Llama-3.1-8B-Instruct"
     """Llama 3.1"""
     LLAMA_2 = "meta-llama/Llama-2-7b-chat-hf"
@@ -95,6 +97,7 @@ MODEL_PROVIDERS = {
     ModelsEnum.LLAMA_3_1: "meta",
     ModelsEnum.LLAMA_2: "meta",
     ModelsEnum.LLAMA_3_3: "meta",
+    ModelsEnum.LLAMA_3_3_70B_LOCAL: "local",
     ModelsEnum.QWEN_2_5_7B: "vllm",
     ModelsEnum.QWEN_2_5_32B: "qdd",
     ModelsEnum.QWEN_2_5_72B: "qdd",
@@ -132,6 +135,7 @@ MODEL_NAMES = {
     "mistralai/Mistral-7B-Instruct-v0.3": "Mistral",
     "meta-llama/Llama-3-70b-chat-hf": "Llama",
     "llama-3.3-70b-instruct": "Llama",
+    "Llama-3.3-70B-Instruct": "Llama",
     "meta-llama/Llama-3.1-8B-Instruct": "Llama",
     "meta-llama/Llama-2-7b-chat-hf": "AI assistant",
     "Qwen/Qwen2.5-7B-Instruct": "Qwen created by Alibaba Cloud.",

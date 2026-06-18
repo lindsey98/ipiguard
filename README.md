@@ -49,7 +49,8 @@ IPIGuard evaluates LLM agents against **indirect prompt injection (IPI)** attack
 [AgentDojo](https://github.com/ethz-spylab/agentdojo) benchmark. Every evaluation is defined by three
 choices:
 
-- **Agent model** — the LLM that drives the agent (e.g. `claude-sonnet-4-5-20250929`, `gpt-4o-mini-2024-07-18`).
+- **Agent model** — the LLM that drives the agent. Hosted (e.g. `claude-sonnet-4-5-20250929`,
+  `gpt-4o-mini-2024-07-18`) or local via an OpenAI-compatible server (e.g. `Llama-3.3-70B-Instruct`).
 - **Attack** — the adversarial content injected into tool outputs (e.g. `important_instructions`), only
   active in `under_attack` mode.
 - **Defense** — the defense strategy applied to the agent. Use `ipiguard` for the proposed defense, or
@@ -103,6 +104,23 @@ export OPENAI_API_KEY='<your_openai_api_key>'
 export OPENAI_BASE_URL='<your_base_url>'   # keep default unless using a proxy/private deployment
 ```
 
+**Local model (e.g. `Llama-3.3-70B-Instruct`):** Serve your model with any
+OpenAI-compatible server (vLLM, Ollama, LM Studio, …) and point IPIGuard at it:
+
+```bash
+export LOCAL_BASE_URL='http://localhost:1111/v1'   # your local server (default shown)
+export LOCAL_API_KEY='EMPTY'                        # most local servers ignore this
+```
+
+Then pass `--agent_model Llama-3.3-70B-Instruct`. Local models work with both the
+`ipiguard` defense and the original (`None`) model. For example, starting a vLLM server:
+
+```bash
+vllm serve meta-llama/Llama-3.3-70B-Instruct \
+    --served-model-name Llama-3.3-70B-Instruct \
+    --port 1111
+```
+
 
 ## 🚀 How to Run
 
@@ -120,7 +138,9 @@ In `benign` mode the attack is not injected, so `--attack_name` is ignored for u
 (e.g. `important_instructions`) is fine. `--defense_name None` runs the **original model** with no defense.
 
 All examples below use the agent model **`anthropic:claude-sonnet-4-5-20250929`** and the `travel` suite.
-Swap `--suite_name` for `workspace`, `slack`, `banking`, or `all` as needed.
+Swap `--suite_name` for `workspace`, `slack`, `banking`, or `all` as needed. To run on a local model
+instead, set `LOCAL_BASE_URL` (see [API Keys](#-api-keys)) and replace
+`--agent_model claude-sonnet-4-5-20250929` with `--agent_model Llama-3.3-70B-Instruct`.
 
 ### 1) Important Instr. attack + IPIGuard defense
 
@@ -196,7 +216,7 @@ bash eval.sh
 
 | Argument          | Description                                                                                       |
 |-------------------|---------------------------------------------------------------------------------------------------|
-| `--agent_model`   | Agent model used for evaluation (e.g. `claude-sonnet-4-5-20250929`, `gpt-4o-mini-2024-07-18`).     |
+| `--agent_model`   | Agent model used for evaluation (e.g. `claude-sonnet-4-5-20250929`, `gpt-4o-mini-2024-07-18`, `Llama-3.3-70B-Instruct`). |
 | `--attack_name`   | Adversarial attack to simulate (e.g. `important_instructions`). Ignored in `benign` mode.          |
 | `--defense_name`  | Defense strategy: `ipiguard` for the proposed defense, or `None` for the original (undefended) model. |
 | `--suite_name`    | Task suite/domain: `travel`, `workspace`, `slack`, `banking`, or `all`.                            |

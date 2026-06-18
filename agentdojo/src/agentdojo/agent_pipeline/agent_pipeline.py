@@ -98,6 +98,14 @@ def get_llm(provider: str, model: str) -> BasePipelineElement:
         )
         # llm = PromptingLLM(client, model)
         llm = OpenAILLM(client, model)
+    elif provider == "local":
+        # Local OpenAI-compatible server (vLLM, Ollama, LM Studio, etc.).
+        # Configure the endpoint with LOCAL_BASE_URL / LOCAL_API_KEY.
+        client = openai.OpenAI(
+            api_key=os.getenv("LOCAL_API_KEY", "EMPTY"),
+            base_url=os.getenv("LOCAL_BASE_URL", "http://localhost:1111/v1"),
+        )
+        llm = OpenAILLM(client, model)
     else:
         raise ValueError("Invalid provider")
     return llm
@@ -180,7 +188,8 @@ class AgentPipeline(BasePipelineElement):
             return pipeline
 
         if config.defense == "ipiguard":
-            if "gpt" in config.llm or "Qwen" in config.llm or "llama" in config.llm:
+            model_name = config.llm.lower()
+            if "gpt" in model_name or "qwen" in model_name or "llama" in model_name:
                 construct_llm = OpenAIConstructLLM(llm.client, config.llm)
                 traverse_llm = OpenAITraverseLLM(llm.client, config.llm)
             elif "claude" in config.llm:
