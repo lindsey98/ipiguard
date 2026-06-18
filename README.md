@@ -80,46 +80,14 @@ cd ..
 ```
 
 
-## 🔑 API Keys
+## 🔑 Setup API Keys
 
-Set the key for the provider whose model you want to run.
-
-**Anthropic (used by the examples below):**
-
-```bash
-export ANTHROPIC_API_KEY='<your_anthropic_api_key>'
-# Optional: override the endpoint (defaults to https://api.anthropic.com/v1/).
-# export ANTHROPIC_BASE_URL='<your_base_url>'
-```
-
-> **Note on the IPIGuard defense with Claude models.** IPIGuard builds and traverses a tool-dependency
-> graph through the OpenAI chat-completions interface. For Claude agent models, IPIGuard talks to
-> Anthropic's **OpenAI-compatible endpoint** using your `ANTHROPIC_API_KEY` (and `ANTHROPIC_BASE_URL` if
-> set). No extra configuration is required — just set `ANTHROPIC_API_KEY`.
-
-**OpenAI (if you instead use a `gpt-*` agent model):**
-
-```bash
-export OPENAI_API_KEY='<your_openai_api_key>'
-export OPENAI_BASE_URL='<your_base_url>'   # keep default unless using a proxy/private deployment
-```
-
-**Local model (e.g. `Llama-3.3-70B-Instruct`):** Serve your model with any
-OpenAI-compatible server (vLLM, Ollama, LM Studio, …) and point IPIGuard at it:
-
-```bash
-export LOCAL_BASE_URL='http://localhost:1111/v1'   # your local server (default shown)
-export LOCAL_API_KEY='EMPTY'                        # most local servers ignore this
-```
-
-Then pass `--agent_model Llama-3.3-70B-Instruct`. Local models work with both the
-`ipiguard` defense and the original (`None`) model. For example, starting a vLLM server:
-
-```bash
-vllm serve meta-llama/Llama-3.3-70B-Instruct \
-    --served-model-name Llama-3.3-70B-Instruct \
-    --port 1111
-```
+Rename `.env.example` to `.env` and populate it with your API keys
+   (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`).
+Load the keys into your environment before running:
+   ```bash
+   set -a && source .env && set +a
+   ```
 
 
 ## 🚀 How to Run
