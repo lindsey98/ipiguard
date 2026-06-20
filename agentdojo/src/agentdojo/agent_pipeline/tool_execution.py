@@ -269,14 +269,23 @@ class DagToolsExecutionLoop(BasePipelineElement):
             raise ValueError("Messages should not be empty when calling ToolsExecutionLoop")
 
         dag = extra_args['dag']
+        # Accumulates every tool call discovered at runtime (across all nodes),
+        # for logging. The per-node `new_tool_calls` field is reset each node.
+        extra_args.setdefault("runtime_new_tool_calls", [])
 
         for node in topological_sort(dag):
             tool_call = dag.nodes[node]
 
             extra_args["current_node"] = node
             extra_args["current_tool_call"] = tool_call["function_call"]
-            
-            query, runtime, env, messages, extra_args = self.executor.query(query, runtime, env, messages, extra_args)  
+
+            query, runtime, env, messages, extra_args = self.executor.query(query, runtime, env, messages, extra_args)
+
+        # Snapshot the expanded DAG (resolved args after traversal) for logging.
+        try:
+            extra_args["expanded_dag"] = json.loads(self.executor.traverse_llm._dag_to_json_str(dag))
+        except Exception:
+            pass
 
         # final output
         query, runtime, env, messages, extra_args = self.executor.traverse_llm.query_response(query, runtime, env, messages, extra_args)
@@ -370,7 +379,19 @@ class DagToolsExecutor(BasePipelineElement):
                 id=str(uuid.uuid4()),
             )
 
-            if current_tool_call.function in whitelist:
+            is_whitelisted = current_tool_call.function in whitelist
+            # Record the runtime-discovered call (and whether it was actually
+            # executed or deferred/rejected by the whitelist) for logging.
+            extra_args.setdefault("runtime_new_tool_calls", []).append({
+                "id": current_tool_call.id,
+                "function_name": current_tool_call.function,
+                "args": current_tool_call.args,
+                "source_node": extra_args.get("current_node"),
+                "whitelisted": is_whitelisted,
+                "status": "executed" if is_whitelisted else "deferred",
+            })
+
+            if is_whitelisted:
                 # query function
                 extra_args["current_tool_call"] = current_tool_call
                 query, runtime, env, messages, extra_args = self._run_tool_call_with_reflection(query, runtime, env, messages, extra_args)

@@ -28,6 +28,8 @@ class AgentTask:
 
     @staticmethod
     def benign_run(agent_pipeline, suite, user_task):
+        messages = []
+        args = {"input_tokens": 0, "output_tokens": 0}
         try:
             utility, security, messages, args = suite.run_task_with_pipeline_msg(
                 agent_pipeline, user_task, injection_task=None, injections={}, extra_args={"input_tokens": 0, "output_tokens": 0}
@@ -57,7 +59,7 @@ class AgentTask:
                     utility = False
                     security = True
 
-        return 1 - int(security), int(utility), messages
+        return 1 - int(security), int(utility), messages, args
 
     @staticmethod
     def run(agent_pipeline, suite, attacks, user_task, injection_task, extra_args):
@@ -99,7 +101,7 @@ class AgentTask:
                     messages = []
                     args = {"input_tokens": 0, "output_tokens": 0}
 
-        return int(security), int(utility), messages
+        return int(security), int(utility), messages, args
 
 @dataclass
 class ScriptArguments:
@@ -136,6 +138,17 @@ class ScriptArguments:
         default=False, metadata={"help": "if True, rerun even if output already exists"}
     )
 
+def _log_run_context(logger, args):
+    """Record IPIGuard DAG snapshots + token usage into the trace JSON (when present).
+
+    For non-IPIGuard runs these keys are simply absent and nothing extra is logged.
+    """
+    for key in ("pre_plan", "initial_dag", "expanded_dag", "runtime_new_tool_calls", "input_tokens", "output_tokens"):
+        if key in args and args[key] is not None:
+            log_key = "new_tool_calls" if key == "runtime_new_tool_calls" else key
+            logger.set_contextarg(log_key, args[key])
+
+
 def benign_eval(script_args, agent_pipeline, suite, attacker, agent_test_dataset, pipeline_name):
     sum = 0
     security = 0
@@ -156,10 +169,11 @@ def benign_eval(script_args, agent_pipeline, suite, attacker, agent_test_dataset
             attack_type="none",
             pipeline_name=pipeline_name,
         ) as logger:
-            task_reward, utility, messages = AgentTask.benign_run(
+            task_reward, utility, messages, args = AgentTask.benign_run(
                 agent_pipeline, suite, user_task_to_run)
             logger.set_contextarg("utility", bool(utility))
             logger.set_contextarg("security", bool(task_reward))
+            _log_run_context(logger, args)
 
         sum += 1
         security += task_reward
@@ -197,10 +211,11 @@ def eval(script_args, agent_pipeline, suite, attacker, agent_test_dataset, pipel
             attack_type=script_args.attack_name,
             pipeline_name=pipeline_name,
         ) as logger:
-            task_reward, utility, history = AgentTask.run(
+            task_reward, utility, history, args = AgentTask.run(
                 agent_pipeline, suite, attacks, user_task_to_run, injection_task_to_run, extra_args={})
             logger.set_contextarg("utility", bool(utility))
             logger.set_contextarg("security", bool(task_reward))
+            _log_run_context(logger, args)
 
         sum += 1
         security += task_reward

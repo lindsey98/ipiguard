@@ -241,7 +241,15 @@ class OpenAIConstructLLM(OpenAILLM):
         dag = self.construct_dag(dag_str)
         extra_args["dag"] = dag
 
-        return query, runtime, env, messages, extra_args  
+        # Snapshot the initial (planned) DAG for logging, before any runtime
+        # argument resolution or node expansion happens.
+        try:
+            extra_args["initial_dag"] = json.loads(dag_str)
+        except (json.JSONDecodeError, TypeError):
+            extra_args["initial_dag"] = dag_str
+        extra_args["pre_plan"] = pre_plan
+
+        return query, runtime, env, messages, extra_args
 
 class OpenAITraverseLLM(OpenAILLM):
     _args_update_prompt = """
