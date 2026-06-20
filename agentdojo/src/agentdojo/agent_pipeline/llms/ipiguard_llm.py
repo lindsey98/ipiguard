@@ -486,8 +486,18 @@ class OpenAITraverseLLM(OpenAILLM):
         
         # print(f"New Args: {new_args}")
         for key in new_args.keys():
+            if key == "reason":
+                continue
             value = tool_call.args.get(key)
             if isinstance(value, str) and 'unknown' in value.lower():
+                extra_args.setdefault("dag_events", []).append({
+                    "event": "resolve_arg",
+                    "node": extra_args.get("current_node"),
+                    "function": tool_call.function,
+                    "arg": key,
+                    "from": value,
+                    "to": new_args[key],
+                })
                 tool_call.args[key] = new_args[key]
 
         extra_args["current_tool_call"] = tool_call
@@ -553,8 +563,18 @@ class OpenAITraverseLLM(OpenAILLM):
         # print(completion.choices[0].message.content)
         response = json.loads(completion.choices[0].message.content)
         new_args = response.get("args", {})
-        
+
         for key in new_args.keys():
+            if key == "reason":
+                continue
+            extra_args.setdefault("dag_events", []).append({
+                "event": "fix_arg",
+                "node": extra_args.get("current_node"),
+                "function": tool_call.function,
+                "arg": key,
+                "from": tool_call.args.get(key),
+                "to": new_args[key],
+            })
             tool_call.args[key] = new_args[key]
 
         extra_args["current_tool_call"] = tool_call

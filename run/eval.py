@@ -143,7 +143,7 @@ def _log_run_context(logger, args):
 
     For non-IPIGuard runs these keys are simply absent and nothing extra is logged.
     """
-    for key in ("pre_plan", "initial_dag", "expanded_dag", "runtime_new_tool_calls", "input_tokens", "output_tokens"):
+    for key in ("pre_plan", "initial_dag", "expanded_dag", "dag_events", "runtime_new_tool_calls", "input_tokens", "output_tokens"):
         if key in args and args[key] is not None:
             log_key = "new_tool_calls" if key == "runtime_new_tool_calls" else key
             logger.set_contextarg(log_key, args[key])

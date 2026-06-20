@@ -269,15 +269,23 @@ class DagToolsExecutionLoop(BasePipelineElement):
             raise ValueError("Messages should not be empty when calling ToolsExecutionLoop")
 
         dag = extra_args['dag']
-        # Accumulates every tool call discovered at runtime (across all nodes),
-        # for logging. The per-node `new_tool_calls` field is reset each node.
+        # Accumulates every tool call discovered at runtime (across all nodes)
+        # plus an ordered timeline of DAG events, for logging. The per-node
+        # `new_tool_calls` field is reset each node.
         extra_args.setdefault("runtime_new_tool_calls", [])
+        extra_args.setdefault("dag_events", [])
 
         for node in topological_sort(dag):
             tool_call = dag.nodes[node]
 
             extra_args["current_node"] = node
             extra_args["current_tool_call"] = tool_call["function_call"]
+            extra_args["dag_events"].append({
+                "event": "visit_node",
+                "node": node,
+                "function": tool_call["function_call"].function,
+                "depends_on": tool_call.get("depends_on", []),
+            })
 
             query, runtime, env, messages, extra_args = self.executor.query(query, runtime, env, messages, extra_args)
 
@@ -388,6 +396,14 @@ class DagToolsExecutor(BasePipelineElement):
                 "args": current_tool_call.args,
                 "source_node": extra_args.get("current_node"),
                 "whitelisted": is_whitelisted,
+                "status": "executed" if is_whitelisted else "deferred",
+            })
+            extra_args.setdefault("dag_events", []).append({
+                "event": "add_node",
+                "node": current_tool_call.id,
+                "function": current_tool_call.function,
+                "args": current_tool_call.args,
+                "source_node": extra_args.get("current_node"),
                 "status": "executed" if is_whitelisted else "deferred",
             })
 
