@@ -35,7 +35,7 @@ class AgentTask:
         except BadRequestError as e:
             if e.code == "context_length_exceeded" or e.param == "max_tokens":
                 print(
-                    f"Skipping task '{user_task.ID}' with '{injection_task.ID}' due to context_length_exceeded: {e}"
+                    f"Skipping task '{user_task.ID}' due to context_length_exceeded: {e}"
                 )
                 utility = False
                 security = True
@@ -44,7 +44,7 @@ class AgentTask:
         except ApiError as e:
             if "internal server error" in str(e):
                 print(
-                    f"Skipping task '{user_task.ID}' with '{injection_task.ID}' because of internal server error: {e}"
+                    f"Skipping task '{user_task.ID}' because of internal server error: {e}"
                 )
                 utility = False
                 security = True
@@ -52,7 +52,7 @@ class AgentTask:
                 raise e
         except InternalServerError as e:
                     print(
-                        f"Skipping task '{user_task.ID}' with '{injection_task.ID}' because of internal server error: {e}"
+                        f"Skipping task '{user_task.ID}' because of internal server error: {e}"
                     )
                     utility = False
                     security = True
@@ -132,13 +132,16 @@ class ScriptArguments:
     iid: Optional[int] = field(
         default="0", metadata={"help": " resume from injection task "}
     )
+    force_rerun: Optional[bool] = field(
+        default=False, metadata={"help": "if True, rerun even if output already exists"}
+    )
 
 def benign_eval(script_args, agent_pipeline, suite, attacker, agent_test_dataset):
     sum = 0
     security = 0
     useful = 0
     for user_task_id in tqdm(agent_test_dataset, desc="Evaluating on the test dataset"):
-        if user_task_id < script_args.uid:
+        if user_task_id != script_args.uid:
             continue
         # user_task_to_run = suite.get_user_task_by_id(f"user_task_{1}")
         user_task_to_run = suite.get_user_task_by_id(f"user_task_{user_task_id}")
@@ -171,9 +174,9 @@ def eval(script_args, agent_pipeline, suite, attacker, agent_test_dataset):
     useful = 0
 
     for user_task_id, injection_task_id in tqdm(agent_test_dataset, desc="Evaluating on the test dataset"):
-        if user_task_id < script_args.uid:
+        if user_task_id != script_args.uid:
             continue
-        if user_task_id == script_args.uid and injection_task_id < script_args.iid:
+        elif injection_task_id != script_args.iid:
             continue
         
         user_task_to_run = suite.get_user_task_by_id(f"user_task_{user_task_id}")
@@ -207,6 +210,11 @@ if __name__ == '__main__':
     load_dotenv()
     parser = HfArgumentParser(ScriptArguments)
     script_args: ScriptArguments = parser.parse_args_into_dataclasses()[0]
+
+    agent_name = script_args.agent_model.replace("/", "_").split(":")[-1]
+    if script_args.defense_name != "None":
+        agent_name = f"{agent_name}+{script_args.defense_name}"
+    script_args.output_dir = os.path.join(script_args.output_dir, agent_name)
     os.makedirs(script_args.output_dir, exist_ok=True)
 
     save_result({"args": vars(script_args)}, script_args.output_dir)
