@@ -149,6 +149,27 @@ def _log_run_context(logger, args):
             logger.set_contextarg(log_key, args[key])
 
 
+def _trace_json_path(output_dir, pipeline_name, suite_name, user_task_id, attack_type, injection_task_id):
+    """Path where TraceLogger writes a task's result (mirrors agentdojo.logging.TraceLogger.save)."""
+    pn = pipeline_name.replace("/", "_")
+    fname = f"{injection_task_id or 'none'}.json"
+    return os.path.join(output_dir, pn, suite_name, user_task_id, attack_type, fname)
+
+
+def _load_completed_result(path):
+    """Return the saved result dict if this task already finished (utility+security logged), else None."""
+    if not os.path.exists(path):
+        return None
+    try:
+        with open(path) as f:
+            data = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return None
+    if data.get("utility") is not None and data.get("security") is not None:
+        return data
+    return None
+
+
 def benign_eval(script_args, agent_pipeline, suite, agent_test_dataset, pipeline_name):
     sum = 0
     security = 0
@@ -158,6 +179,17 @@ def benign_eval(script_args, agent_pipeline, suite, agent_test_dataset, pipeline
         if script_args.uid is not None and user_task_id != script_args.uid:
             continue
         user_task_to_run = suite.get_user_task_by_id(f"user_task_{user_task_id}")
+
+        # Resume: skip tasks that already have a logged result unless force_rerun.
+        result_path = _trace_json_path(
+            script_args.output_dir, pipeline_name, suite.name, user_task_to_run.ID, "none", None)
+        if not script_args.force_rerun:
+            done = _load_completed_result(result_path)
+            if done is not None:
+                sum += 1
+                security += int(done["security"])
+                useful += int(done["utility"])
+                continue
 
         # AgentDojo-style logging: one JSON per task at
         #   {logdir}/{pipeline_name}/{suite}/{user_task_id}/none/none.json
@@ -200,6 +232,19 @@ def eval(script_args, agent_pipeline, suite, attacker, agent_test_dataset, pipel
 
         user_task_to_run = suite.get_user_task_by_id(f"user_task_{user_task_id}")
         injection_task_to_run = suite.get_injection_task_by_id(f"injection_task_{injection_task_id}")
+
+        # Resume: skip tasks that already have a logged result unless force_rerun.
+        result_path = _trace_json_path(
+            script_args.output_dir, pipeline_name, suite.name,
+            user_task_to_run.ID, script_args.attack_name, injection_task_to_run.ID)
+        if not script_args.force_rerun:
+            done = _load_completed_result(result_path)
+            if done is not None:
+                sum += 1
+                security += int(done["security"])
+                useful += int(done["utility"])
+                continue
+
         attacks = attacker.attack(user_task_to_run, injection_task_to_run)
 
         # AgentDojo-style logging: one JSON per (task, injection) at
