@@ -37,6 +37,25 @@ from agentdojo.default_suites.v1.tools.tool_white_list import whitelist
 def _openai_to_assistant_message(message: ChatCompletionMessage) -> ChatAssistantMessage:
     return ChatAssistantMessage(role="assistant", content=message.content, tool_calls=None)
 
+
+# Some local models (e.g. Qwen3 served through vLLM's hermes template) leak raw
+# <tool_call>{...}</tool_call> markup into the final assistant content when no
+# `tools` are passed. IPIGuard drives tools via the DAG, not native function
+# calling, so this markup is never meaningful here -- strip it from the final answer.
+_TOOL_MARKUP_RE = re.compile(
+    r"<tool_call>.*?</tool_call>|<tool_response>.*?</tool_response>", re.DOTALL
+)
+
+
+def _strip_tool_call_markup(text: str | None) -> str | None:
+    if not text:
+        return text
+    cleaned = _TOOL_MARKUP_RE.sub("", text)
+    # drop any stray/unmatched tags too
+    cleaned = re.sub(r"</?tool_call>|</?tool_response>", "", cleaned)
+    return cleaned.strip()
+
+
 def _tool_call_to_str(tool_call: FunctionCall, error=None) -> str:
     tool_call_dict = {
         "function": tool_call.function,
@@ -544,7 +563,9 @@ class OpenAITraverseLLM(OpenAILLM):
         completion = chat_completion_request(self.client, self.model, openai_messages, self.temperature, json_format=False)
         prompt_tokens, completion_tokens = completion.usage.prompt_tokens, completion.usage.completion_tokens
         add_tokens(extra_args=extra_args, prompt_tokens=prompt_tokens, completion_tokens=completion_tokens)
-        return query, runtime, env, [*messages, _openai_to_assistant_message(completion.choices[0].message)], extra_args
+        content = _strip_tool_call_markup(completion.choices[0].message.content)
+        assistant_message = ChatAssistantMessage(role="assistant", content=content, tool_calls=None)
+        return query, runtime, env, [*messages, assistant_message], extra_args
 
     def query_reflection(
         self,
