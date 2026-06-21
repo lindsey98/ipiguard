@@ -381,9 +381,23 @@ class DagToolsExecutor(BasePipelineElement):
         new_commands_results = []
         
         for new_tool_call in new_tool_calls:
+            # Local / weaker models don't always honor the JSON schema, so be
+            # tolerant: skip non-dict entries and accept common key aliases.
+            if not isinstance(new_tool_call, dict):
+                continue
+            function_name = (
+                new_tool_call.get("function_name")
+                or new_tool_call.get("function")
+                or new_tool_call.get("name")
+            )
+            if not function_name:
+                continue
+            call_args = new_tool_call.get("args")
+            if not isinstance(call_args, dict):
+                call_args = new_tool_call.get("arguments") if isinstance(new_tool_call.get("arguments"), dict) else {}
             current_tool_call = FunctionCall(
-                function=new_tool_call["function_name"],
-                args=new_tool_call["args"],
+                function=function_name,
+                args=call_args,
                 id=str(uuid.uuid4()),
             )
 

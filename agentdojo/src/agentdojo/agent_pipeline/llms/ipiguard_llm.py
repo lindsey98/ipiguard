@@ -480,8 +480,10 @@ class OpenAITraverseLLM(OpenAILLM):
         # print(completion.choices[0].message.content)
         response = json.loads(completion.choices[0].message.content)
         
-        new_args = response.get("args", {})
-        new_tool_calls = response.get("new_tool_calls", [])
+        new_args = response.get("args") or {}
+        new_tool_calls = response.get("new_tool_calls") or []
+        if not isinstance(new_tool_calls, list):
+            new_tool_calls = []
         
         
         # print(f"New Args: {new_args}")
@@ -523,7 +525,9 @@ class OpenAITraverseLLM(OpenAILLM):
         
         # print(completion.choices[0].message.content)
         response = json.loads(completion.choices[0].message.content)
-        new_tool_calls = response.get("new_tool_calls", [])
+        new_tool_calls = response.get("new_tool_calls") or []
+        if not isinstance(new_tool_calls, list):
+            new_tool_calls = []
         extra_args["new_tool_calls"].extend(new_tool_calls)
         
         return query, runtime, env, messages, extra_args
@@ -562,7 +566,7 @@ class OpenAITraverseLLM(OpenAILLM):
         add_tokens(extra_args=extra_args, prompt_tokens=prompt_tokens, completion_tokens=completion_tokens)
         # print(completion.choices[0].message.content)
         response = json.loads(completion.choices[0].message.content)
-        new_args = response.get("args", {})
+        new_args = response.get("args") or {}
 
         for key in new_args.keys():
             if key == "reason":
