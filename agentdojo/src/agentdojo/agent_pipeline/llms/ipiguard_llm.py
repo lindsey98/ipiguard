@@ -560,6 +560,23 @@ class OpenAITraverseLLM(OpenAILLM):
         extra_args: dict = {},
     ) -> tuple[str, FunctionsRuntime, Env, Sequence[ChatMessage], dict]:
         openai_messages = [_message_to_openai(message) for message in messages]
+        # Local / open models (e.g. Qwen3, Llama) tend to leak tool-call markup
+        # into the final answer. Steer this last turn toward a plain natural-language
+        # answer. Hosted GPT/Claude models are left untouched to preserve the
+        # paper's reproducible numbers. The steering goes only into this request,
+        # not into the persisted/logged message history.
+        model_lower = self.model.lower()
+        if "gpt" not in model_lower and "claude" not in model_lower:
+            openai_messages.append(
+                ChatCompletionUserMessageParam(
+                    role="user",
+                    content=(
+                        "Now write the final answer for the user in plain natural language, "
+                        "based on the tool results above. Do not call any tools and do not "
+                        "output <tool_call> or <tool_response> tags."
+                    ),
+                )
+            )
         completion = chat_completion_request(self.client, self.model, openai_messages, self.temperature, json_format=False)
         prompt_tokens, completion_tokens = completion.usage.prompt_tokens, completion.usage.completion_tokens
         add_tokens(extra_args=extra_args, prompt_tokens=prompt_tokens, completion_tokens=completion_tokens)
