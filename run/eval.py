@@ -129,10 +129,10 @@ class ScriptArguments:
         default="under_attack", metadata={"help": " 'benign' or 'under_attack' "}
     )
     uid: Optional[int] = field(
-        default="0", metadata={"help": " resume from user task "}
+        default=None, metadata={"help": "debug only: run a single user-task id; run all tasks if unset"}
     )
     iid: Optional[int] = field(
-        default="0", metadata={"help": " resume from injection task "}
+        default=None, metadata={"help": "debug only: run a single injection-task id; run all if unset"}
     )
     force_rerun: Optional[bool] = field(
         default=False, metadata={"help": "if True, rerun even if output already exists"}
@@ -149,12 +149,13 @@ def _log_run_context(logger, args):
             logger.set_contextarg(log_key, args[key])
 
 
-def benign_eval(script_args, agent_pipeline, suite, attacker, agent_test_dataset, pipeline_name):
+def benign_eval(script_args, agent_pipeline, suite, agent_test_dataset, pipeline_name):
     sum = 0
     security = 0
     useful = 0
     for user_task_id in tqdm(agent_test_dataset, desc="Evaluating on the test dataset"):
-        if user_task_id != script_args.uid:
+        # uid is a debugging filter: when unset, run every user task.
+        if script_args.uid is not None and user_task_id != script_args.uid:
             continue
         user_task_to_run = suite.get_user_task_by_id(f"user_task_{user_task_id}")
 
@@ -191,9 +192,10 @@ def eval(script_args, agent_pipeline, suite, attacker, agent_test_dataset, pipel
     useful = 0
 
     for user_task_id, injection_task_id in tqdm(agent_test_dataset, desc="Evaluating on the test dataset"):
-        if user_task_id != script_args.uid:
+        # uid/iid are debugging filters: when unset, run every (task, injection) pair.
+        if script_args.uid is not None and user_task_id != script_args.uid:
             continue
-        elif injection_task_id != script_args.iid:
+        if script_args.iid is not None and injection_task_id != script_args.iid:
             continue
 
         user_task_to_run = suite.get_user_task_by_id(f"user_task_{user_task_id}")
@@ -267,13 +269,12 @@ if __name__ == '__main__':
                     )
                 )
 
-            attacker = load_attack(script_args.attack_name, suite, pipeline)
-
             if script_args.mode == "benign":
                 dataset = initialize_dataset(suite_n, benign=True)
                 security, useful, sum, suite_asr, ability = benign_eval(
-                    script_args, pipeline, suite, attacker, dataset, pipeline_name)
+                    script_args, pipeline, suite, dataset, pipeline_name)
             elif script_args.mode == "under_attack":
+                attacker = load_attack(script_args.attack_name, suite, pipeline)
                 dataset = initialize_dataset(suite_n)
                 security, useful, sum, suite_asr, ability = eval(
                     script_args, pipeline, suite, attacker, dataset, pipeline_name)
