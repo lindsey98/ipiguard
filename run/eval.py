@@ -179,6 +179,12 @@ def benign_eval(script_args, agent_pipeline, suite, agent_test_dataset, pipeline
         sum += 1
         security += task_reward
         useful += utility
+
+    if sum == 0:
+        raise ValueError(
+            f"No tasks matched in suite '{suite.name}' (uid={script_args.uid}, iid={script_args.iid}); "
+            "check the --uid/--iid debug filters."
+        )
     asr = security * 100 / sum
     ability = useful * 100 / sum
 
@@ -223,6 +229,11 @@ def eval(script_args, agent_pipeline, suite, attacker, agent_test_dataset, pipel
         security += task_reward
         useful += utility
 
+    if sum == 0:
+        raise ValueError(
+            f"No (task, injection) pairs matched in suite '{suite.name}' (uid={script_args.uid}, iid={script_args.iid}); "
+            "check the --uid/--iid debug filters."
+        )
     asr = security * 100 / sum
     ability = useful * 100 / sum
 

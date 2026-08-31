@@ -15,6 +15,5 @@ python3 run/eval.py \
     --attack_name "$attack_name" \
     --defense_name "$defense_name" \
     --output_dir "$output_dir" \
-    --mode "$mode" \
-    --uid 0 \
-    --iid 0
+    --mode "$mode"
+# For debugging a single task, append: --uid <user_task_id> --iid <injection_task_id>
