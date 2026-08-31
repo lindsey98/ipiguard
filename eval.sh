@@ -2,8 +2,9 @@
 agent_model="local:Qwen3.6-35B-A3B"
 attack_name="important_instructions"
 defense_name="ipiguard"          # use "None" to run the original model (no defense)
-suite_name="all"                 # expands to slack, banking, travel, workspace
-mode="under_attack"              # "benign" for no-attack runs
+suite_name="all"                 # "all"=AgentDojo 4, "agentdyn"=shopping/github/dailylife, "everything"=all 7
+# mode="under_attack"              # "benign" for no-attack runs
+ mode="benign"              # "benign" for no-attack runs
 
 output_dir="logs/"
 

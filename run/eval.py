@@ -21,7 +21,7 @@ from agentdojo.task_suite.task_suite import TaskSuite
 from agentdojo.agent_pipeline.llms.ipiguard_llm import MalformedModelOutputError
 from agentdojo.attacks.agentic_attacks import AgenticAttack
 from agentdojo.functions_runtime import FunctionCall
-from data_module import initialize_dataset
+from data_module import AGENTDOJO_SUITES, AGENTDYN_SUITES, initialize_dataset
 from tqdm import tqdm
 # Per-task logging is handled by AgentDojo's TraceLogger (see benign_eval/eval).
 
@@ -314,8 +314,13 @@ if __name__ == '__main__':
     logdir = script_args.output_dir
     os.makedirs(logdir, exist_ok=True)
 
-    if len(script_args.suite_name) == 1 and script_args.suite_name[0] == "all":
-        script_args.suite_name = ["slack", "banking", "travel", "workspace"]
+    if len(script_args.suite_name) == 1:
+        if script_args.suite_name[0] == "all":
+            script_args.suite_name = AGENTDOJO_SUITES
+        elif script_args.suite_name[0] == "agentdyn":
+            script_args.suite_name = AGENTDYN_SUITES
+        elif script_args.suite_name[0] == "everything":
+            script_args.suite_name = AGENTDOJO_SUITES + AGENTDYN_SUITES
 
     success = 0
     attack = 0
@@ -343,12 +348,12 @@ if __name__ == '__main__':
                 )
 
             if script_args.mode == "benign":
-                dataset = initialize_dataset(suite_n, benign=True)
+                dataset = initialize_dataset(suite_n, benign=True, benchmark_version=script_args.benchmark_version)
                 security, useful, sum, suite_asr, ability = benign_eval(
                     script_args, pipeline, suite, dataset, pipeline_name)
             elif script_args.mode == "under_attack":
                 attacker = load_attack(script_args.attack_name, suite, pipeline)
-                dataset = initialize_dataset(suite_n)
+                dataset = initialize_dataset(suite_n, benchmark_version=script_args.benchmark_version)
                 security, useful, sum, suite_asr, ability = eval(
                     script_args, pipeline, suite, attacker, dataset, pipeline_name)
             else:

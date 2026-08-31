@@ -70,9 +70,11 @@ def functions_stack_trace_from_messages(
 def model_output_from_messages(
     messages: Sequence[ChatMessage],
 ) -> list[MessageContentBlock] | None:
-    if messages[-1]["role"] != "assistant":
-        raise ValueError("Last message was not an assistant message")
-    return messages[-1]["content"]
+    # AgentDyn-style: use the last assistant message even if tool/user messages follow
+    for message in reversed(messages):
+        if message["role"] == "assistant":
+            return message["content"]
+    raise ValueError("No assistant message found")
 
 
 @lru_cache

@@ -46,8 +46,10 @@
 ## 📖 Overview
 
 IPIGuard evaluates LLM agents against **indirect prompt injection (IPI)** attacks on top of the
-[AgentDojo](https://github.com/ethz-spylab/agentdojo) benchmark. Every evaluation is defined by three
-choices:
+[AgentDojo](https://github.com/ethz-spylab/agentdojo) benchmark (v0.1.35), extended with the three
+dynamic suites from [AgentDyn](https://github.com/SaFo-Lab/AgentDyn) (`shopping`, `github`,
+`dailylife` — 60 open-ended user tasks and 560 injection test cases). Every evaluation is defined by
+three choices:
 
 - **Agent model** — the LLM that drives the agent. Hosted (e.g. `claude-sonnet-4-5-20250929`,
   `gpt-4o-mini-2024-07-18`) or local via an OpenAI-compatible server (e.g. `Llama-3.3-70B-Instruct`).
@@ -73,11 +75,16 @@ cd ipiguard
 conda create -n ipiguard python=3.10
 conda activate ipiguard
 
-# install agentdojo (editable)
+# install the bundled agentdojo (editable). This vendored copy is based on
+# agentdojo 0.1.35 and already includes the AgentDyn suites (shopping, github,
+# dailylife) — no separate AgentDyn installation is needed.
 cd agentdojo
 pip install -e .
 cd ..
 ```
+
+> Upgrading from an older checkout? Re-run `pip install -e .` inside `agentdojo/` — the
+> 0.1.35 base adds dependencies such as `google-genai` and `deepdiff`.
 
 
 ## 🔑 Setup API Keys
@@ -106,9 +113,11 @@ In `benign` mode the attack is not injected, so `--attack_name` is ignored for u
 (e.g. `important_instructions`) is fine. `--defense_name None` runs the **original model** with no defense.
 
 All examples below use the agent model **`anthropic:claude-sonnet-4-5-20250929`** and the `travel` suite.
-Swap `--suite_name` for `workspace`, `slack`, `banking`, or `all` as needed. To run on a local model
+Swap `--suite_name` for any AgentDojo suite (`workspace`, `slack`, `banking`, `travel`) or AgentDyn
+suite (`shopping`, `github`, `dailylife`), or use a group: `all` (the four AgentDojo suites),
+`agentdyn` (the three AgentDyn suites), or `everything` (all seven). To run on a local model
 instead, set `LOCAL_BASE_URL` (see [API Keys](#-api-keys)) and replace
-`--agent_model claude-sonnet-4-5-20250929` with `--agent_model Llama-3.3-70B-Instruct`.
+`--agent_model claude-sonnet-4-5-20250929` with `--agent_model Qwen3.6-35B-A3B`.
 
 ### 1) Important Instr. attack + IPIGuard defense
 
@@ -162,15 +171,15 @@ python3 run/eval.py \
 
 ### Using the shell script
 
-`eval.sh` wraps a single configuration with an auto-generated, timestamped `output_dir`. Edit the variables
-at the top and run it:
+`eval.sh` wraps a single configuration with a fixed `logs/` output dir, so interrupted runs resume
+where they left off (completed trace JSONs are skipped). Edit the variables at the top and run it:
 
 ```bash
 # inside eval.sh
-agent_model="claude-sonnet-4-5-20250929"
+agent_model="local:Qwen3.6-35B-A3B"
 attack_name="important_instructions"
 defense_name="ipiguard"          # or "None" for the original model
-suite_name="travel"
+suite_name="all"                 # or "agentdyn" / "everything" / a single suite
 mode="under_attack"              # or "benign"
 ```
 
@@ -185,10 +194,12 @@ bash eval.sh
 | `--agent_model`   | Agent model used for evaluation (e.g. `claude-sonnet-4-5-20250929`, `gpt-4o-mini-2024-07-18`, `Llama-3.3-70B-Instruct`). |
 | `--attack_name`   | Adversarial attack to simulate (e.g. `important_instructions`). Ignored in `benign` mode.          |
 | `--defense_name`  | Defense strategy: `ipiguard` for the proposed defense, or `None` for the original (undefended) model. |
-| `--suite_name`    | Task suite/domain: `travel`, `workspace`, `slack`, `banking`, or `all`.                            |
+| `--suite_name`    | Task suite/domain: `travel`, `workspace`, `slack`, `banking` (AgentDojo); `shopping`, `github`, `dailylife` (AgentDyn); or a group: `all` (AgentDojo), `agentdyn`, `everything`. |
+| `--benchmark_version` | Suite version (default `v1.2`). The AgentDyn suites are unversioned and available under every version. |
 | `--mode`          | `benign` → standard tasks without attacks; `under_attack` → adversarial tasks with injected attacks. |
 | `--output_dir`    | Directory to store evaluation results (JSON logs + per-suite ASR/Utility).                          |
-| `--uid` / `--iid` | User-task ID and injection-task ID to resume from after an interruption.                            |
+| `--uid` / `--iid` | Debug filters: run only the given user-task / injection-task ID.                                    |
+| `--force_rerun`   | Rerun tasks even when a completed trace JSON already exists in `output_dir` (by default completed tasks are skipped and their recorded results reused). |
 
 Each run prints and saves **ASR** (Attack Success Rate ↓, lower is better) and **Utility** (task success ↑,
 higher is better) per suite and overall.

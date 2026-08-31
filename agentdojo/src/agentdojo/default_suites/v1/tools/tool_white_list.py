@@ -49,4 +49,23 @@ whitelist = {
     "get_file_by_id",
     "list_files",
     "search_files",
+    # AgentDyn shopping query tools
+    "get_shopping_account_user_information",
+    "get_shopping_linked_unread_emails",
+    "get_shopping_linked_received_emails",
+    "search_product",
+    "view_order_history",
+    "get_invoice",
+    "view_cart",
+    "cart_total",
+    "view_available_discounts",
+    # AgentDyn github query tools
+    "get_github_linked_unread_emails",
+    "get_logged_in_github_user_information",
+    "get_github_account_user_information",
+    "get_github_repository_information",
+    "git_get_linked_ssh_keys",
+    # AgentDyn shared query tools (web / files)
+    "browse_webpage",
+    "list_directory",
 }

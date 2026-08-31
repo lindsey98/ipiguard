@@ -1,26 +1,24 @@
-user_task_num = {
-    "banking": 16,
-    "workspace": 40,
-    "slack": 21,
-    "travel": 20,
-}
+from agentdojo.task_suite.load_suites import get_suite
 
-injection_task_num = {
-    "banking": 9,
-    "workspace": 14,  # v1.2 added injection tasks 6-13
-    "slack": 5,
-    "travel": 7,
-}
+AGENTDOJO_SUITES = ["slack", "banking", "travel", "workspace"]
+AGENTDYN_SUITES = ["shopping", "github", "dailylife"]
 
-def initialize_dataset(suite_name, benign=False):
-    delta = 0
-    if suite_name == 'slack':
-        delta = 1
 
+def _task_ids(tasks: dict, prefix: str) -> list[int]:
+    return sorted(int(task_id.removeprefix(prefix)) for task_id in tasks)
+
+
+def initialize_dataset(suite_name, benign=False, benchmark_version="v1.2"):
+    """Enumerate task ids straight from the suite registry.
+
+    Returns user-task ids for benign runs, else the full cross product of
+    (user_task_id, injection_task_id) pairs. Deriving the ids from the loaded
+    suite keeps this correct across benchmark versions and for the AgentDyn
+    suites (shopping/github/dailylife), whose id ranges differ per suite.
+    """
+    suite = get_suite(benchmark_version, suite_name)
+    user_ids = _task_ids(suite.user_tasks, "user_task_")
     if benign:
-        return [
-            i for i in range(user_task_num[suite_name])
-        ]
-    return [
-        (i, j + delta) for i in range(user_task_num[suite_name]) for j in range(injection_task_num[suite_name])
-    ]
+        return user_ids
+    injection_ids = _task_ids(suite.injection_tasks, "injection_task_")
+    return [(u, i) for u in user_ids for i in injection_ids]
