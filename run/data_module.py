@@ -7,7 +7,7 @@ user_task_num = {
 
 injection_task_num = {
     "banking": 9,
-    "workspace": 6,
+    "workspace": 14,  # v1.2 added injection tasks 6-13
     "slack": 5,
     "travel": 7,
 }

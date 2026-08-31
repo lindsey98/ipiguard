@@ -123,7 +123,7 @@ class ScriptArguments:
     )
     # agent parameters
     benchmark_version: Optional[str] = field(
-        default="v1.1.2", metadata={"help": "the benchmark version"}
+        default="v1.2", metadata={"help": "the benchmark version"}
     )
     suite_name: Optional[List[str]] = field(
         default_factory=lambda: ["workspace","slack", "travel", "banking"], 
