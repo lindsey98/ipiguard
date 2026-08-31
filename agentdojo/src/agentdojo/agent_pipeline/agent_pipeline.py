@@ -93,8 +93,15 @@ def get_llm(provider: str, model: str) -> BasePipelineElement:
         llm = GoogleLLM(model)
     elif provider == 'vllm':
         client = openai.OpenAI(
-            api_key="EMPTY",
-            base_url="http://localhost:1111/v1"
+            api_key=os.getenv("LOCAL_API_KEY", "EMPTY"),
+            base_url=os.getenv("LOCAL_BASE_URL", "http://localhost:8000/v1"),
+        )
+        # llm = PromptingLLM(client, model)
+        llm = OpenAILLM(client, model)
+    elif provider == 'local':
+        client = openai.OpenAI(
+            api_key=os.getenv("LOCAL_API_KEY", "EMPTY"),
+            base_url=os.getenv("LOCAL_BASE_URL", "http://localhost:8000/v1"),
         )
         # llm = PromptingLLM(client, model)
         llm = OpenAILLM(client, model)
@@ -196,7 +203,12 @@ class AgentPipeline(BasePipelineElement):
                 construct_llm = OpenAIConstructLLM(client, config.llm)
                 traverse_llm = OpenAITraverseLLM(client, config.llm)
             else:
-                raise ValueError(f"Dag defense is not yet supported for the model: {config.llm}, try OpenAI/Anthropic's models.")
+                client = openai.OpenAI(
+                    api_key=os.getenv("LOCAL_API_KEY", "EMPTY"),
+                    base_url=os.getenv("LOCAL_BASE_URL", "http://localhost:8000/v1"),
+                )
+                construct_llm = OpenAIConstructLLM(client, config.llm)
+                traverse_llm  = OpenAITraverseLLM(client, config.llm)
 
             executor = DagToolsExecutor(traverse_llm)
             tools_loop = DagToolsExecutionLoop(executor)

@@ -49,7 +49,8 @@ IPIGuard evaluates LLM agents against **indirect prompt injection (IPI)** attack
 [AgentDojo](https://github.com/ethz-spylab/agentdojo) benchmark. Every evaluation is defined by three
 choices:
 
-- **Agent model** — the LLM that drives the agent (e.g. `claude-sonnet-4-5-20250929`, `gpt-4o-mini-2024-07-18`).
+- **Agent model** — the LLM that drives the agent. Hosted (e.g. `claude-sonnet-4-5-20250929`,
+  `gpt-4o-mini-2024-07-18`) or local via an OpenAI-compatible server (e.g. `Llama-3.3-70B-Instruct`).
 - **Attack** — the adversarial content injected into tool outputs (e.g. `important_instructions`), only
   active in `under_attack` mode.
 - **Defense** — the defense strategy applied to the agent. Use `ipiguard` for the proposed defense, or
@@ -79,28 +80,13 @@ cd ..
 ```
 
 
-## 🔑 API Keys
+## 🔑 Setup API Keys
 
-Set the key for the provider whose model you want to run.
-
-**Anthropic (used by the examples below):**
-
+Rename `.env.example` to `.env` and populate it with your API keys
+   (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`).
+Load the keys into your environment before running:
 ```bash
-export ANTHROPIC_API_KEY='<your_anthropic_api_key>'
-# Optional: override the endpoint (defaults to https://api.anthropic.com/v1/).
-# export ANTHROPIC_BASE_URL='<your_base_url>'
-```
-
-> **Note on the IPIGuard defense with Claude models.** IPIGuard builds and traverses a tool-dependency
-> graph through the OpenAI chat-completions interface. For Claude agent models, IPIGuard talks to
-> Anthropic's **OpenAI-compatible endpoint** using your `ANTHROPIC_API_KEY` (and `ANTHROPIC_BASE_URL` if
-> set). No extra configuration is required — just set `ANTHROPIC_API_KEY`.
-
-**OpenAI (if you instead use a `gpt-*` agent model):**
-
-```bash
-export OPENAI_API_KEY='<your_openai_api_key>'
-export OPENAI_BASE_URL='<your_base_url>'   # keep default unless using a proxy/private deployment
+set -a && source .env && set +a
 ```
 
 
@@ -120,19 +106,20 @@ In `benign` mode the attack is not injected, so `--attack_name` is ignored for u
 (e.g. `important_instructions`) is fine. `--defense_name None` runs the **original model** with no defense.
 
 All examples below use the agent model **`anthropic:claude-sonnet-4-5-20250929`** and the `travel` suite.
-Swap `--suite_name` for `workspace`, `slack`, `banking`, or `all` as needed.
+Swap `--suite_name` for `workspace`, `slack`, `banking`, or `all` as needed. To run on a local model
+instead, set `LOCAL_BASE_URL` (see [API Keys](#-api-keys)) and replace
+`--agent_model claude-sonnet-4-5-20250929` with `--agent_model Llama-3.3-70B-Instruct`.
 
 ### 1) Important Instr. attack + IPIGuard defense
 
 ```bash
 python3 run/eval.py \
     --suite_name travel \
-    --agent_model claude-sonnet-4-5-20250929 \
+    --agent_model Llama-3.3-70B-Instruct \
     --attack_name important_instructions \
     --defense_name ipiguard \
     --mode under_attack \
-    --output_dir evaluation_results/attack_ipiguard \
-    --uid 0 --iid 0
+    --output_dir logs/ \
 ```
 
 ### 2) No attack + IPIGuard defense
@@ -144,8 +131,7 @@ python3 run/eval.py \
     --attack_name important_instructions \
     --defense_name ipiguard \
     --mode benign \
-    --output_dir evaluation_results/benign_ipiguard \
-    --uid 0 --iid 0
+    --output_dir logs/ \
 ```
 
 ### 3) Important Instr. attack + original model (no defense)
@@ -196,7 +182,7 @@ bash eval.sh
 
 | Argument          | Description                                                                                       |
 |-------------------|---------------------------------------------------------------------------------------------------|
-| `--agent_model`   | Agent model used for evaluation (e.g. `claude-sonnet-4-5-20250929`, `gpt-4o-mini-2024-07-18`).     |
+| `--agent_model`   | Agent model used for evaluation (e.g. `claude-sonnet-4-5-20250929`, `gpt-4o-mini-2024-07-18`, `Llama-3.3-70B-Instruct`). |
 | `--attack_name`   | Adversarial attack to simulate (e.g. `important_instructions`). Ignored in `benign` mode.          |
 | `--defense_name`  | Defense strategy: `ipiguard` for the proposed defense, or `None` for the original (undefended) model. |
 | `--suite_name`    | Task suite/domain: `travel`, `workspace`, `slack`, `banking`, or `all`.                            |
@@ -206,39 +192,3 @@ bash eval.sh
 
 Each run prints and saves **ASR** (Attack Success Rate ↓, lower is better) and **Utility** (task success ↑,
 higher is better) per suite and overall.
-
-
-## 📊 Results
-
-| Attack            | Workspace       | Slack           | Travel          | Banking         | Overall         |
-|------------------|------------------|------------------|------------------|------------------|------------------|
-|                  | ASR↓ / UA↑       | ASR↓ / UA↑       | ASR↓ / UA↑       | ASR↓ / UA↑       | ASR↓ / UA↑       |
-| Ignore Previous  | 0.00 / 68.33     | 0.00 / 59.05     | 0.00 / 62.86     | 2.78 / 49.31     | 0.64 / 61.21     |
-| InjectAgent      | 0.42 / 67.92     | 0.95 / 63.81     | 0.00 / 65.00     | 0.00 / 47.92     | 0.32 / 61.84     |
-| Tool Knowledge   | 0.00 / 69.58     | 1.90 / 59.05     | 0.00 / 59.29     | 2.78 / 47.92     | 0.95 / 60.57     |
-| Important Instr. | 0.83 / 65.00     | 0.00 / 49.52     | 0.00 / 57.14     | 1.39 / 49.31     | 0.64 / 57.07     |
-| Average          | 0.31 / 67.71     | 0.71 / 57.86     | 0.00 / 61.07     | 1.74 / 48.44     | 0.69 / 58.77     |
-
-More results and ablations are available in the [paper](https://arxiv.org/abs/2508.15310).
-
-
-## 📌 Citation
-
-If you use this code or find our work helpful, please cite:
-
-```bibtex
-@misc{an2025ipiguardnoveltooldependency,
-      title={IPIGuard: A Novel Tool Dependency Graph-Based Defense Against Indirect Prompt Injection in LLM Agents},
-      author={Hengyu An and Jinghuai Zhang and Tianyu Du and Chunyi Zhou and Qingming Li and Tao Lin and Shouling Ji},
-      year={2025},
-      eprint={2508.15310},
-      archivePrefix={arXiv},
-      primaryClass={cs.CR},
-      url={https://arxiv.org/abs/2508.15310},
-}
-```
-
-
-## 🏷️ License
-
-Apache License 2.0 - See [LICENSE](LICENSE) for details.

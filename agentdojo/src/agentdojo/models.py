@@ -40,6 +40,8 @@ class ModelsEnum(StrEnum):
     """Llama 3"""
     LLAMA_3_3 = "llama-3.3-70b-instruct"
     """Llama 3.3"""
+    LLAMA_3_3_70B_LOCAL = "Llama-3.3-70B-Instruct"
+    """Llama 3.3 70B served locally via an OpenAI-compatible server"""
     LLAMA_3_1 = "meta-llama/Llama-3.1-8B-Instruct"
     """Llama 3.1"""
     LLAMA_2 = "meta-llama/Llama-2-7b-chat-hf"
@@ -49,7 +51,8 @@ class ModelsEnum(StrEnum):
     QWEN_2_5_32B = "Qwen/Qwen2.5-32B-Instruct"
     """Qwen 2.5 32B"""
     QWEN_2_5_72B = "Qwen/Qwen2.5-72B-Instruct"
-    """Qwen 2.5 72B"""
+    QWEN_3_30B_LOCAL = "Qwen3-30B-A3B-Instruct-2507"
+    """Qwen3 30B A3B Instruct served locally via an OpenAI-compatible server"""
     DEEPSEEK_V3 = "deepseek-ai/DeepSeek-V3"
     """DeepSeek V3"""
     DEEPSEEK_R1 = "deepseek-ai/DeepSeek-R1"
@@ -95,9 +98,11 @@ MODEL_PROVIDERS = {
     ModelsEnum.LLAMA_3_1: "meta",
     ModelsEnum.LLAMA_2: "meta",
     ModelsEnum.LLAMA_3_3: "meta",
+    ModelsEnum.LLAMA_3_3_70B_LOCAL: "local",
     ModelsEnum.QWEN_2_5_7B: "vllm",
     ModelsEnum.QWEN_2_5_32B: "qdd",
     ModelsEnum.QWEN_2_5_72B: "qdd",
+    ModelsEnum.QWEN_3_30B_LOCAL: "local",
     ModelsEnum.DEEPSEEK_LLAMA: "vllm",
     ModelsEnum.PHI_4: "vllm",
     ModelsEnum.DEEPSEEK_V3: "deepseek",
@@ -132,8 +137,10 @@ MODEL_NAMES = {
     "mistralai/Mistral-7B-Instruct-v0.3": "Mistral",
     "meta-llama/Llama-3-70b-chat-hf": "Llama",
     "llama-3.3-70b-instruct": "Llama",
+    "Llama-3.3-70B-Instruct": "Llama",
     "meta-llama/Llama-3.1-8B-Instruct": "Llama",
     "meta-llama/Llama-2-7b-chat-hf": "AI assistant",
+    "Qwen3-30B-A3B-Instruct-2507": "Qwen created by Alibaba Cloud.",
     "Qwen/Qwen2.5-7B-Instruct": "Qwen created by Alibaba Cloud.",
     "Qwen/Qwen2.5-32B-Instruct": "Qwen created by Alibaba Cloud.",
     "Qwen/Qwen2.5-72B-Instruct": "Qwen created by Alibaba Cloud.",

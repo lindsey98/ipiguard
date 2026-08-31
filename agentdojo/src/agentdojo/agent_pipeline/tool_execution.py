@@ -269,14 +269,31 @@ class DagToolsExecutionLoop(BasePipelineElement):
             raise ValueError("Messages should not be empty when calling ToolsExecutionLoop")
 
         dag = extra_args['dag']
+        # Accumulates every tool call discovered at runtime (across all nodes)
+        # plus an ordered timeline of DAG events, for logging. The per-node
+        # `new_tool_calls` field is reset each node.
+        extra_args.setdefault("runtime_new_tool_calls", [])
+        extra_args.setdefault("dag_events", [])
 
         for node in topological_sort(dag):
             tool_call = dag.nodes[node]
 
             extra_args["current_node"] = node
             extra_args["current_tool_call"] = tool_call["function_call"]
-            
-            query, runtime, env, messages, extra_args = self.executor.query(query, runtime, env, messages, extra_args)  
+            extra_args["dag_events"].append({
+                "event": "visit_node",
+                "node": node,
+                "function": tool_call["function_call"].function,
+                "depends_on": tool_call.get("depends_on", []),
+            })
+
+            query, runtime, env, messages, extra_args = self.executor.query(query, runtime, env, messages, extra_args)
+
+        # Snapshot the expanded DAG (resolved args after traversal) for logging.
+        try:
+            extra_args["expanded_dag"] = json.loads(self.executor.traverse_llm._dag_to_json_str(dag))
+        except Exception:
+            pass
 
         # final output
         query, runtime, env, messages, extra_args = self.executor.traverse_llm.query_response(query, runtime, env, messages, extra_args)
@@ -364,13 +381,47 @@ class DagToolsExecutor(BasePipelineElement):
         new_commands_results = []
         
         for new_tool_call in new_tool_calls:
+            # Local / weaker models don't always honor the JSON schema, so be
+            # tolerant: skip non-dict entries and accept common key aliases.
+            if not isinstance(new_tool_call, dict):
+                continue
+            function_name = (
+                new_tool_call.get("function_name")
+                or new_tool_call.get("function")
+                or new_tool_call.get("name")
+            )
+            if not function_name:
+                continue
+            call_args = new_tool_call.get("args")
+            if not isinstance(call_args, dict):
+                call_args = new_tool_call.get("arguments") if isinstance(new_tool_call.get("arguments"), dict) else {}
             current_tool_call = FunctionCall(
-                function=new_tool_call["function_name"],
-                args=new_tool_call["args"],
+                function=function_name,
+                args=call_args,
                 id=str(uuid.uuid4()),
             )
 
-            if current_tool_call.function in whitelist:
+            is_whitelisted = current_tool_call.function in whitelist
+            # Record the runtime-discovered call (and whether it was actually
+            # executed or deferred/rejected by the whitelist) for logging.
+            extra_args.setdefault("runtime_new_tool_calls", []).append({
+                "id": current_tool_call.id,
+                "function_name": current_tool_call.function,
+                "args": current_tool_call.args,
+                "source_node": extra_args.get("current_node"),
+                "whitelisted": is_whitelisted,
+                "status": "executed" if is_whitelisted else "deferred",
+            })
+            extra_args.setdefault("dag_events", []).append({
+                "event": "add_node",
+                "node": current_tool_call.id,
+                "function": current_tool_call.function,
+                "args": current_tool_call.args,
+                "source_node": extra_args.get("current_node"),
+                "status": "executed" if is_whitelisted else "deferred",
+            })
+
+            if is_whitelisted:
                 # query function
                 extra_args["current_tool_call"] = current_tool_call
                 query, runtime, env, messages, extra_args = self._run_tool_call_with_reflection(query, runtime, env, messages, extra_args)
