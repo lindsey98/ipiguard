@@ -18,6 +18,7 @@ from agentdojo.logging import OutputLogger
 from agentdojo.models import ModelsEnum
 from agentdojo.task_suite.load_suites import get_suite, get_suites
 from agentdojo.task_suite.task_suite import TaskSuite
+from agentdojo.agent_pipeline.llms.ipiguard_llm import MalformedModelOutputError
 from agentdojo.attacks.agentic_attacks import AgenticAttack
 from agentdojo.functions_runtime import FunctionCall
 from data_module import initialize_dataset
@@ -58,6 +59,10 @@ class AgentTask:
                     )
                     utility = False
                     security = True
+        except MalformedModelOutputError as e:
+            print(f"Skipping task '{user_task.ID}' because of malformed model output: {e}")
+            utility = False
+            security = True
 
         return 1 - int(security), int(utility), messages, args
 
@@ -100,6 +105,14 @@ class AgentTask:
                     security = True
                     messages = []
                     args = {"input_tokens": 0, "output_tokens": 0}
+        except MalformedModelOutputError as e:
+            print(
+                f"Skipping task '{user_task.ID}' with '{injection_task.ID}' because of malformed model output: {e}"
+            )
+            utility = False
+            security = True
+            messages = []
+            args = {"input_tokens": 0, "output_tokens": 0}
 
         return int(security), int(utility), messages, args
 

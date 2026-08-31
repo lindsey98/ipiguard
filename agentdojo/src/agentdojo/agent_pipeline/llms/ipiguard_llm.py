@@ -85,12 +85,56 @@ def chat_completion_request(
         "model": model,
         "messages": messages,
         "temperature": temperature,
+        # Bounds runaway generations (local models in JSON mode can loop until
+        # the context is full); legit IPIGuard outputs are far below this.
+        "max_tokens": 8192,
     }
 
     if json_format:
         create_kwargs["response_format"] = {"type": "json_object"}
 
     return client.chat.completions.create(**create_kwargs)
+
+
+class MalformedModelOutputError(Exception):
+    """The model returned unparsable JSON even after retries."""
+
+
+def chat_completion_json(
+    client: openai.OpenAI,
+    model: str,
+    messages: Sequence[ChatCompletionMessageParam],
+    temperature: float | None,
+    extra_args: dict,
+    max_retries: int = 2,
+) -> dict:
+    """Request a JSON completion and parse it, retrying on malformed output.
+
+    Local models occasionally emit truncated or runaway JSON even with
+    response_format=json_object; a fresh (slightly warmer) sample usually
+    fixes it. Raises MalformedModelOutputError after exhausting retries.
+    """
+    last_error: Exception | None = None
+    for attempt in range(max_retries + 1):
+        # temperature 0 would just resample the same broken output
+        attempt_temperature = temperature if attempt == 0 else max(temperature or 0.0, 0.7)
+        completion = chat_completion_request(client, model, messages, attempt_temperature, json_format=True)
+        add_tokens(
+            extra_args=extra_args,
+            prompt_tokens=completion.usage.prompt_tokens,
+            completion_tokens=completion.usage.completion_tokens,
+        )
+        try:
+            parsed = json.loads(completion.choices[0].message.content)
+            if isinstance(parsed, dict):
+                return parsed
+            last_error = ValueError(f"expected a JSON object, got {type(parsed).__name__}")
+        except (json.JSONDecodeError, TypeError) as e:
+            last_error = e
+        print(f"[ipiguard] malformed JSON from {model} (attempt {attempt + 1}/{max_retries + 1}): {last_error}")
+    raise MalformedModelOutputError(
+        f"model '{model}' returned unparsable JSON after {max_retries + 1} attempts: {last_error}"
+    ) from last_error
 
 def add_tokens(extra_args, prompt_tokens, completion_tokens):
     extra_args["input_tokens"] += prompt_tokens
@@ -181,8 +225,8 @@ class OpenAIConstructLLM(OpenAILLM):
     ) -> tuple[ChatSystemMessage | None, Sequence[ChatMessage]]:
             return messages[0], messages[1]
 
-    def construct_dag(self, dag_str):
-        tool_calls_data = json.loads(dag_str).get("tool_calls", [])
+    def construct_dag(self, dag_data: dict):
+        tool_calls_data = dag_data.get("tool_calls", [])
         dag = nx.DiGraph()
         
         # add node
@@ -250,22 +294,20 @@ class OpenAIConstructLLM(OpenAILLM):
         construct_system_message = self._get_system_message(system_message, list(runtime.functions.values()))
         openai_messages = [_message_to_openai(construct_system_message), _message_to_openai(user_message)]
     
-        completion = chat_completion_request(self.client, self.model, openai_messages, self.temperature, json_format=True)
-        prompt_tokens, completion_tokens = completion.usage.prompt_tokens, completion.usage.completion_tokens
-        add_tokens(extra_args=extra_args, prompt_tokens=prompt_tokens, completion_tokens=completion_tokens)
-        
-        dag_str = completion.choices[0].message.content
-        # print(dag_str)
+        dag_data = chat_completion_json(self.client, self.model, openai_messages, self.temperature, extra_args)
 
-        dag = self.construct_dag(dag_str)
+        try:
+            dag = self.construct_dag(dag_data)
+        except (KeyError, TypeError, AttributeError) as e:
+            # valid JSON but not the expected DAG structure
+            raise MalformedModelOutputError(
+                f"model '{self.model}' returned a JSON DAG with unexpected structure: {e}"
+            ) from e
         extra_args["dag"] = dag
 
         # Snapshot the initial (planned) DAG for logging, before any runtime
         # argument resolution or node expansion happens.
-        try:
-            extra_args["initial_dag"] = json.loads(dag_str)
-        except (json.JSONDecodeError, TypeError):
-            extra_args["initial_dag"] = dag_str
+        extra_args["initial_dag"] = dag_data
         extra_args["pre_plan"] = pre_plan
 
         return query, runtime, env, messages, extra_args
@@ -492,14 +534,15 @@ class OpenAITraverseLLM(OpenAILLM):
         history = [*messages, user_message]
         openai_messages = [_message_to_openai(message) for message in history]
 
-        completion = chat_completion_request(self.client, self.model, openai_messages, self.temperature, json_format=True)
-        prompt_tokens, completion_tokens = completion.usage.prompt_tokens, completion.usage.completion_tokens
-        add_tokens(extra_args=extra_args, prompt_tokens=prompt_tokens, completion_tokens=completion_tokens)
+        try:
+            response = chat_completion_json(self.client, self.model, openai_messages, self.temperature, extra_args)
+        except MalformedModelOutputError as e:
+            print(f"[ipiguard] skipping argument update for '{tool_call.function}': {e}")
+            return query, runtime, env, messages, extra_args
 
-        # print(completion.choices[0].message.content)
-        response = json.loads(completion.choices[0].message.content)
-        
         new_args = response.get("args") or {}
+        if not isinstance(new_args, dict):
+            new_args = {}
         new_tool_calls = response.get("new_tool_calls") or []
         if not isinstance(new_tool_calls, list):
             new_tool_calls = []
@@ -538,12 +581,12 @@ class OpenAITraverseLLM(OpenAILLM):
         openai_messages = [_message_to_openai(message) for message in messages]
         openai_messages.append(_message_to_openai(user_message))
 
-        completion = chat_completion_request(self.client, self.model, openai_messages, self.temperature, json_format=True)
-        prompt_tokens, completion_tokens = completion.usage.prompt_tokens, completion.usage.completion_tokens
-        add_tokens(extra_args=extra_args, prompt_tokens=prompt_tokens, completion_tokens=completion_tokens)
-        
-        # print(completion.choices[0].message.content)
-        response = json.loads(completion.choices[0].message.content)
+        try:
+            response = chat_completion_json(self.client, self.model, openai_messages, self.temperature, extra_args)
+        except MalformedModelOutputError as e:
+            print(f"[ipiguard] skipping node expansion: {e}")
+            return query, runtime, env, messages, extra_args
+
         new_tool_calls = response.get("new_tool_calls") or []
         if not isinstance(new_tool_calls, list):
             new_tool_calls = []
@@ -599,12 +642,15 @@ class OpenAITraverseLLM(OpenAILLM):
         history = [*messages, user_message]
         openai_messages = [_message_to_openai(message) for message in history]
 
-        completion = chat_completion_request(self.client, self.model, openai_messages, self.temperature, json_format=True)
-        prompt_tokens, completion_tokens = completion.usage.prompt_tokens, completion.usage.completion_tokens
-        add_tokens(extra_args=extra_args, prompt_tokens=prompt_tokens, completion_tokens=completion_tokens)
-        # print(completion.choices[0].message.content)
-        response = json.loads(completion.choices[0].message.content)
+        try:
+            response = chat_completion_json(self.client, self.model, openai_messages, self.temperature, extra_args)
+        except MalformedModelOutputError as e:
+            print(f"[ipiguard] skipping reflection fix for '{tool_call.function}': {e}")
+            return query, runtime, env, messages, extra_args
+
         new_args = response.get("args") or {}
+        if not isinstance(new_args, dict):
+            new_args = {}
 
         for key in new_args.keys():
             if key == "reason":
