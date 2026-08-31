@@ -151,6 +151,34 @@ class ScriptArguments:
         default=False, metadata={"help": "if True, rerun even if output already exists"}
     )
 
+def _cached_result(script_args, pipeline_name, suite_name, user_task_id, attack_type, injection_task_id):
+    """Return (task_reward, utility) from an existing trace JSON, or None to (re)run.
+
+    Reuses results only when the file is complete (has utility/security and no
+    recorded error), so interrupted or crashed tasks are rerun.
+    """
+    if script_args.force_rerun:
+        return None
+    path = os.path.join(
+        script_args.output_dir,
+        pipeline_name.replace("/", "_"),
+        suite_name,
+        user_task_id,
+        attack_type,
+        f"{injection_task_id or 'none'}.json",
+    )
+    if not os.path.exists(path):
+        return None
+    try:
+        with open(path) as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return None
+    if data.get("error") is not None or "security" not in data or "utility" not in data:
+        return None
+    return int(bool(data["security"])), int(bool(data["utility"]))
+
+
 def _log_run_context(logger, args):
     """Record IPIGuard DAG snapshots + token usage into the trace JSON (when present).
 
@@ -171,6 +199,14 @@ def benign_eval(script_args, agent_pipeline, suite, agent_test_dataset, pipeline
         if script_args.uid is not None and user_task_id != script_args.uid:
             continue
         user_task_to_run = suite.get_user_task_by_id(f"user_task_{user_task_id}")
+
+        cached = _cached_result(script_args, pipeline_name, suite.name, user_task_to_run.ID, "none", None)
+        if cached is not None:
+            task_reward, utility = cached
+            sum += 1
+            security += task_reward
+            useful += utility
+            continue
 
         # AgentDojo-style logging: one JSON per task at
         #   {logdir}/{pipeline_name}/{suite}/{user_task_id}/none/none.json
@@ -219,6 +255,18 @@ def eval(script_args, agent_pipeline, suite, attacker, agent_test_dataset, pipel
 
         user_task_to_run = suite.get_user_task_by_id(f"user_task_{user_task_id}")
         injection_task_to_run = suite.get_injection_task_by_id(f"injection_task_{injection_task_id}")
+
+        cached = _cached_result(
+            script_args, pipeline_name, suite.name, user_task_to_run.ID,
+            script_args.attack_name, injection_task_to_run.ID,
+        )
+        if cached is not None:
+            task_reward, utility = cached
+            sum += 1
+            security += task_reward
+            useful += utility
+            continue
+
         attacks = attacker.attack(user_task_to_run, injection_task_to_run)
 
         # AgentDojo-style logging: one JSON per (task, injection) at
