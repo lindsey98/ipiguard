@@ -5,7 +5,7 @@ defense_name="ipiguard"          # use "None" to run the original model (no defe
 suite_name="all"                 # expands to slack, banking, travel, workspace
 mode="under_attack"              # "benign" for no-attack runs
 
-output_dir="logs/$(echo $suite_name | tr '/' '_')/$(echo $agent_model | tr '/' '_')/$(echo $mode | tr '/' '_')_$(echo $attack_name | tr ' ' '_')_$(echo $defense_name | tr ' ' '_')_$(date +%Y%m%d_%H%M%S)"
+output_dir="logs/"
 
 mkdir -p "$output_dir"
 
