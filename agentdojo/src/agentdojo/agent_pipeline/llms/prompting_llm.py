@@ -4,19 +4,72 @@ import re
 import time
 from collections.abc import Sequence
 
-from openai.types.chat import ChatCompletionMessage
+from openai.types.chat import (
+    ChatCompletionAssistantMessageParam,
+    ChatCompletionDeveloperMessageParam,
+    ChatCompletionMessage,
+    ChatCompletionMessageParam,
+    ChatCompletionToolMessageParam,
+    ChatCompletionUserMessageParam,
+)
 
-from agentdojo.agent_pipeline.llms.openai_llm import OpenAILLM, _message_to_openai, chat_completion_request
+from agentdojo.agent_pipeline.llms.openai_llm import (
+    OpenAILLM,
+    _message_to_openai,
+    _tool_call_to_openai,
+    chat_completion_request,
+)
 from agentdojo.ast_utils import (
     ASTParsingError,
     create_python_function_from_tool_call,
     parse_tool_calls_from_python_function,
 )
 from agentdojo.functions_runtime import EmptyEnv, Env, Function, FunctionsRuntime
-from agentdojo.types import ChatAssistantMessage, ChatMessage, ChatSystemMessage, ChatToolResultMessage, ChatUserMessage
+from agentdojo.types import (
+    ChatAssistantMessage,
+    ChatMessage,
+    ChatSystemMessage,
+    ChatToolResultMessage,
+    ChatUserMessage,
+    get_text_content_as_str,
+    text_content_block_from_string,
+)
 
 
 class InvalidModelOutputError(Exception): ...
+
+
+def _message_to_together(message: ChatMessage, model_name: str) -> ChatCompletionMessageParam:
+    match message["role"]:
+        case "system":
+            return ChatCompletionDeveloperMessageParam(
+                role="developer", content=get_text_content_as_str(message["content"])
+            )
+        case "user":
+            return ChatCompletionUserMessageParam(role="user", content=get_text_content_as_str(message["content"]))
+        case "assistant":
+            if message["tool_calls"] is not None and len(message["tool_calls"]) > 0:
+                tool_calls = [_tool_call_to_openai(tool_call) for tool_call in message["tool_calls"]]
+                return ChatCompletionAssistantMessageParam(
+                    role="assistant",
+                    content=get_text_content_as_str(message["content"] or []),
+                    tool_calls=tool_calls,
+                )
+            return ChatCompletionAssistantMessageParam(
+                role="assistant",
+                content=get_text_content_as_str(message["content"] or []),
+            )
+        case "tool":
+            if message["tool_call_id"] is None:
+                raise ValueError("`tool_call_id` should be specified for OpenAI.")
+            return ChatCompletionToolMessageParam(
+                content=message["error"] or get_text_content_as_str(message["content"]),
+                tool_call_id=message["tool_call_id"],
+                role="tool",
+                name=message["tool_call"].function,  # type: ignore -- this is actually used, and is important!
+            )
+        case _:
+            raise ValueError(f"Invalid message type: {message}")
 
 
 class BasePromptingLLM(OpenAILLM):
@@ -99,31 +152,39 @@ class BasePromptingLLM(OpenAILLM):
             self._tool_message_to_user_message(message) if message["role"] == "tool" else message
             for message in messages
         ]
-        openai_messages = [_message_to_openai(message) for message in adapted_messages]
+        # TODO: this is specific to Together's API. Look into improving it.
+        openai_messages = [_message_to_together(message, self.model) for message in adapted_messages]
         system_message, other_messages = self._get_system_message(messages)
         system_message = self._make_tools_prompt(system_message, list(runtime.functions.values()))
         if system_message is not None:
-            openai_messages = [system_message, *openai_messages]
-        
-        completion = chat_completion_request(self.client, self.model, openai_messages, [], self.temperature)
+            converted_system_message = ChatSystemMessage(
+                role="system",
+                # TODO: this is specific to Together's API. Look into improving it.
+                content=get_text_content_as_str(system_message["content"] or []),  # type: ignore -- This is correct for TogetherAI's API
+            )
+            openai_messages = [converted_system_message, *openai_messages]
+        completion = chat_completion_request(self.client, self.model, openai_messages, [], None, self.temperature)
         output = ChatAssistantMessage(
             role="assistant",
-            content=completion.choices[0].message.content or "",
+            content=[text_content_block_from_string(completion.choices[0].message.content or "")],
             tool_calls=[],
         )
-        if len(runtime.functions) == 0 or "<function-call>" not in (output["content"] or ""):
+        if len(runtime.functions) == 0 or "<function-call>" not in (get_text_content_as_str(output["content"] or [])):
             return query, runtime, env, [*messages, output], extra_args
         for _ in range(self._MAX_ATTEMPTS):
             try:
                 output = self._parse_model_output(completion.choices[0].message)
                 break
             except (InvalidModelOutputError, ASTParsingError) as e:
-                error_message = ChatUserMessage(role="user", content=f"Invalid function calling output: {e!s}")
+                error_message = ChatUserMessage(
+                    role="user", content=[text_content_block_from_string(f"Invalid function calling output: {e!s}")]
+                )
                 completion = chat_completion_request(
                     self.client,
                     self.model,
-                    [*openai_messages, _message_to_openai(error_message)],
+                    [*openai_messages, _message_to_openai(error_message, self.model)],
                     [],
+                    None,
                     self.temperature,
                 )
         return query, runtime, env, [*messages, output], extra_args
@@ -178,7 +239,7 @@ If you think you will need to call multiple tools in multiple stages, but you do
         if len(tools) == 0:
             return system_message
         tools_docs = ""
-        system_prompt = system_message["content"] if system_message is not None else ""
+        system_prompt = get_text_content_as_str(system_message["content"]) if system_message is not None else ""
         for index, tool in enumerate(tools, start=1):
             tool_dict = {
                 "name": tool.name,
@@ -190,7 +251,7 @@ If you think you will need to call multiple tools in multiple stages, but you do
             tools_docs += f"\n</function-{index}>\n\n"
         tool_calling_prompt = self._tool_calling_prompt.format(funcs=tools_docs)
         message_content = f"{tool_calling_prompt}\n{system_prompt}\n IMPORTANT: Only call one function at a time!!!"
-        return ChatSystemMessage(role="system", content=message_content)
+        return ChatSystemMessage(role="system", content=[text_content_block_from_string(message_content)])
 
     def _parse_model_output(self, message: ChatCompletionMessage) -> ChatAssistantMessage:
         """Parses the model output by extracting text and/or tool call contents from the message.
@@ -213,7 +274,11 @@ If you think you will need to call multiple tools in multiple stages, but you do
             The assistant message with the extracted text and tool calls.
         """
         if message.content is None:
-            return ChatAssistantMessage(role="assistant", content="", tool_calls=None)
+            return ChatAssistantMessage(
+                role="assistant",
+                content=[text_content_block_from_string("")],
+                tool_calls=None,
+            )
         tool_call_pattern = re.compile(r"<function-call>(.*?)</function-call>", re.DOTALL)
         tool_call_match = tool_call_pattern.search(message.content)
 
@@ -241,7 +306,11 @@ If you think you will need to call multiple tools in multiple stages, but you do
                 raise InvalidModelOutputError("The answer should be in <answer> tags if no tool calls are provided.")
             outside_content = answer_match.group(1)
 
-        return ChatAssistantMessage(role="assistant", content=outside_content, tool_calls=tool_calls)
+        return ChatAssistantMessage(
+            role="assistant",
+            content=[text_content_block_from_string(outside_content)],
+            tool_calls=tool_calls,
+        )
 
     def _tool_message_to_user_message(self, tool_message: ChatToolResultMessage) -> ChatUserMessage:
         """It places the output of the tool call in the <function-result> tags and the tool call in the <function-call> tags.
@@ -250,12 +319,12 @@ If you think you will need to call multiple tools in multiple stages, but you do
         function_call_signature = create_python_function_from_tool_call(tool_message["tool_call"])
         function_call = f"<function-call>{function_call_signature}</function-call>"
         if tool_message["error"] is None:
-            tool_result = f"<function-result>{tool_message['content']}</function-result>"
+            tool_result = f"<function-result>{get_text_content_as_str(tool_message['content'])}</function-result>"
         else:
             tool_result = f"<function-error>{tool_message['error']}</function-error>"
         return ChatUserMessage(
             role="user",
-            content=f"{function_call}{tool_result}",
+            content=[text_content_block_from_string(f"{function_call}{tool_result}")],
         )
 
 if __name__ == '__main__':

@@ -5,7 +5,108 @@ hide:
 
 # Changelog
 
-## v0.1.21
+## v0.1.33
+
+### Features
+
+None
+
+### Bug Fixes
+
+- Add warning in case of empty Google response by @dedeswim in https://github.com/ethz-spylab/agentdojo/pull/91
+- Add compatibility for VLLM's OpenAI API w/ built in tool parser by @thavens in https://github.com/ethz-spylab/agentdojo/pull/85
+- Support for Meta-SecAlign-70B model by @cg563 in https://github.com/ethz-spylab/agentdojo/pull/97
+- Adding result for Llama 3.3 and Meta SecAlign 70B by @cg563 in https://github.com/ethz-spylab/agentdojo/pull/96
+- [bug]: fix RecursionError when using `spotlighting_with_delimiting` defense by @llCurious in https://github.com/ethz-spylab/agentdojo/pull/118
+- Refactor/unused_code by @jasiecky in https://github.com/ethz-spylab/agentdojo/pull/113
+- Fix detector loop extracting content from wrong message by @Copilot in https://github.com/ethz-spylab/agentdojo/pull/125
+- Fix issue with longer docs being ignored by @dedeswim in https://github.com/ethz-spylab/agentdojo/pull/129
+- v1.2.2 tasks by @dedeswim in https://github.com/ethz-spylab/agentdojo/pull/130
+
+### Breaking Changes
+
+- None
+
+### New Contributors
+- @cg563 made their first contribution in https://github.com/ethz-spylab/agentdojo/pull/97
+- @llCurious made their first contribution in https://github.com/ethz-spylab/agentdojo/pull/118
+- @jasiecky made their first contribution in https://github.com/ethz-spylab/agentdojo/pull/113
+
+**Full Changelog**: https://github.com/ethz-spylab/agentdojo/compare/v0.1.34...v0.1.35
+
+## v0.1.33
+
+### Features
+
+- Add support for `max_tokens` parameter for `GoogleLLM`
+
+### Breaking Changes
+
+None
+
+### Bug Fixes
+
+None
+
+## v0.1.33
+
+### Features
+
+- Add support for new Google SDK (#84) by @dedeswim
+
+### Breaking Changes
+
+- The use of `GoogleLLM` without passing a client as argument is now deprecated (but still supported)
+
+### Bug Fixes
+
+None
+
+## v0.1.32
+
+### Features
+
+None
+
+### Breaking Changes
+
+None
+
+### Bug Fixes
+
+- Fix issue with TogetherAI LLM (#82) by @dedeswim.
+
+## v0.1.31
+
+### Features
+
+None
+
+### Breaking Changes
+
+None
+
+### Bug Fixes
+
+- Fix issue with OpenAI LLM (#77) by @thavens.
+
+## v0.1.30
+
+### Features
+
+- Add support for multi-block chat messages (#63) by @dedeswim.
+- Add support for reasoning models (Anthropic and OpenAI) and arguments (#60) by @dedeswim.
+- Add support for vLLM models (#68) by @normster and @thavens.
+
+### Breaking Changes
+
+- Single-block chat messages are not supported anymore. Old chat logs are still correctly loaded, but all `ChatMessage`'s `'content'` usage should be updated. A unique text can be extracted from `ChatMessage['content']` by using the `agentdojo.types.get_text_content_as_str` utility function. Check #63 for more information.
+
+### Bug Fixes
+
+- Fix some issues in Benchmark v1.2 (#75) by @dedeswim and @EricWinsorDSIT
+
+## v0.1.22
 
 ### Features
 

@@ -1,6 +1,6 @@
 import dataclasses
 import inspect
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Mapping, MutableMapping, Sequence
 from typing import Annotated, Any, Concatenate, Generic, TypeAlias, get_origin, get_type_hints, overload
 
 from docstring_parser import parse
@@ -43,7 +43,7 @@ class FunctionCall(BaseModel):
 
     function: str
     """The name of the function to call."""
-    args: Mapping[str, "FunctionCallArgTypes"]
+    args: MutableMapping[str, "FunctionCallArgTypes"]
     """The arguments to pass to the function."""
     id: str | None = None
     """An optional ID for the function call. E.g., used by OpenAI and Anthropic."""
@@ -126,9 +126,13 @@ def make_function(function: Callable[P, T]) -> Function:
     function_docs = parse(function.__doc__)
     if function_docs.short_description is None:
         raise ValueError(f"Function {function.__name__} has no short description")
+    description = function_docs.short_description
+    if function_docs.long_description is not None:
+        description = f"{description}\n{function_docs.long_description}"
+
     return Function[P, T](
         name=function.__name__,
-        description=function_docs.short_description.replace("None", "null"),
+        description=description.replace("None", "null"),
         parameters=_parse_args(function.__name__, function_docs.params, inspect.signature(function)),
         run=function,
         dependencies=dependencies,

@@ -3,7 +3,7 @@ from collections.abc import Sequence
 
 from agentdojo.agent_pipeline.base_pipeline_element import BasePipelineElement
 from agentdojo.functions_runtime import EmptyEnv, Env, FunctionsRuntime
-from agentdojo.types import ChatMessage, ChatSystemMessage, ChatUserMessage
+from agentdojo.types import ChatMessage, ChatSystemMessage, ChatUserMessage, text_content_block_from_string
 
 USER_PROMPT_WITH_REFLECTION = """
 ## Task Description
@@ -108,7 +108,7 @@ class InitQuery(BasePipelineElement):
     ) -> tuple[str, FunctionsRuntime, Env, Sequence[ChatMessage], dict]:
         if len(messages) > 2 or (len(messages) == 1 and messages[0]["role"] != "system"):
             warnings.warn("The query is not being added as the first message or after the system message")
-        query_message = ChatUserMessage(role="user", content=query)
+        query_message = ChatUserMessage(role="user", content=[text_content_block_from_string(query)])
         messages = [*messages, query_message]
         return query, runtime, env, messages, extra_args
 
@@ -149,7 +149,7 @@ class ReActQuery(BasePipelineElement):
             input=query,
             agent_scratchpad=extra_args.get("agent_scratchpad"),
         )
-        query_message = ChatUserMessage(role="user", content=query_str)
+        query_message = ChatUserMessage(role="user", content=[text_content_block_from_string(query_str)])
         messages = [*messages, query_message]
         return query, runtime, env, messages, extra_args
 
@@ -173,5 +173,5 @@ class SystemMessage(BasePipelineElement):
     ) -> tuple[str, FunctionsRuntime, Env, Sequence[ChatMessage], dict]:
         if len(messages) > 0:
             raise ValueError("The system message should be the first message")
-        system_message = ChatSystemMessage(role="system", content=self.system_message)
+        system_message = ChatSystemMessage(role="system", content=[text_content_block_from_string(self.system_message)])
         return query, runtime, env, [system_message], extra_args

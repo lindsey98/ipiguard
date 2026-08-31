@@ -9,7 +9,7 @@ import pandas as pd
 from agentdojo.benchmark import load_suite_results
 from agentdojo.models import MODEL_PROVIDERS
 from agentdojo.task_suite import get_suites
-from agentdojo.types import ChatMessage
+from agentdojo.types import ChatMessage, get_text_content_as_str
 
 
 def find_information_tags(text: str) -> list[tuple[int, int, int]]:
@@ -22,7 +22,7 @@ def get_injection_position_in_tool_outputs(messages: list[ChatMessage]) -> list[
     injection_positions = []
     for message in messages:
         if message["role"] == "tool":
-            matches = find_information_tags(message["content"])
+            matches = find_information_tags(get_text_content_as_str(message["content"]))
             if len(matches) == 0:
                 continue
             injection_positions.append(matches)
@@ -45,7 +45,9 @@ def make_dataframe(eval_infos: list[EvalInfo], benchmark_version: str, logdir: P
         pipeline = f"{model}" if eval_info.defense is None else f"{model}-{eval_info.defense}"
         attack = eval_info.attack if eval_info.attack is not None else ""
         for suite in get_suites(benchmark_version):
-            results_without, results_with = load_suite_results(suite, pipeline, attack, logdir=logdir)
+            results_without, results_with = load_suite_results(
+                suite, pipeline, attack, logdir=logdir, benchmark_version=benchmark_version
+            )
             for (user_task, injection_task), result in results_without.items():
                 injections_positions = get_injection_position_in_tool_outputs(result.messages)
                 injection_seen = len(injections_positions) > 0
@@ -108,6 +110,11 @@ def make_dataframe(eval_infos: list[EvalInfo], benchmark_version: str, logdir: P
 
 
 TABLE_MODELS = [
+    EvalInfo(
+        "claude-3-7-sonnet-20250219",
+        datetime.date(2025, 2, 24),
+        traceuid=None,
+    ),
     EvalInfo(
         "claude-3-5-sonnet-20241022",
         datetime.date(2024, 11, 15),
@@ -195,6 +202,8 @@ TABLE_MODELS = [
     EvalInfo("gemini-1.5-pro-001", datetime.date(2024, 6, 5), traceuid="invariant/agentdojo-gemini-1-5-pro-001"),
     EvalInfo("gemini-1.5-flash-002", datetime.date(2024, 11, 5), traceuid="invariant/agentdojo-gemini-1-5-flash-002"),
     EvalInfo("gemini-1.5-flash-001", datetime.date(2024, 6, 5), traceuid="invariant/agentdojo-gemini-1-5-flash-001"),
+    EvalInfo("gemini-2.0-flash-exp", datetime.date(2024, 12, 11), traceuid=None),
+    EvalInfo("gemini-2.0-flash-001", datetime.date(2025, 1, 30), traceuid=None),
 ]
 
 
@@ -247,7 +256,8 @@ def main(logdir: Path, benchmark_version: str) -> None:
 
     # render traceuid s as links
     def traceurl_formatter(traceuid: str) -> str:
-        if traceuid is None:
+        # check for pandas nan
+        if traceuid is None or str(traceuid) == "nan":
             return ""
         return f'<a style="font-size: 12pt;" href="https://explorer.invariantlabs.ai/u/{traceuid}/t/1" target="_blank">Explore &rarr;</a>'
 

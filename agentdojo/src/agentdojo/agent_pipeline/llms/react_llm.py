@@ -20,7 +20,7 @@ from tenacity import retry, retry_if_not_exception_type, stop_after_attempt, wai
 
 from agentdojo.agent_pipeline.base_pipeline_element import BasePipelineElement
 from agentdojo.functions_runtime import EmptyEnv, Env, Function, FunctionCall, FunctionsRuntime
-from agentdojo.types import ChatAssistantMessage, ChatMessage, ChatUserMessage
+from agentdojo.types import ChatAssistantMessage, ChatMessage, ChatUserMessage, get_text_content_as_str, text_content_block_from_string
 
 
 def _tool_call_to_openai(tool_call: FunctionCall) -> ChatCompletionMessageToolCallParam:
@@ -36,30 +36,36 @@ def _tool_call_to_openai(tool_call: FunctionCall) -> ChatCompletionMessageToolCa
     )
 
 
+def _content_as_str(message: ChatMessage) -> str | None:
+    if message["content"] is None:
+        return None
+    return get_text_content_as_str(message["content"])
+
+
 def _message_to_openai(message: ChatMessage) -> ChatCompletionMessageParam:
     match message["role"]:
         case "system":
-            return ChatCompletionSystemMessageParam(role="system", content=message["content"])
+            return ChatCompletionSystemMessageParam(role="system", content=_content_as_str(message) or "")
         case "user":
-            return ChatCompletionUserMessageParam(role="user", content=message["content"])
+            return ChatCompletionUserMessageParam(role="user", content=_content_as_str(message) or "")
         case "assistant":
             if message["tool_calls"] is not None and len(message["tool_calls"]) > 0:
                 tool_calls = [_tool_call_to_openai(tool_call) for tool_call in message["tool_calls"]]
                 return ChatCompletionAssistantMessageParam(
                     role="assistant",
-                    content=message["content"],
+                    content=_content_as_str(message),
                     tool_calls=tool_calls,
                 )
             return ChatCompletionAssistantMessageParam(
                 role="assistant",
-                content=message["content"],
+                content=_content_as_str(message),
             )
         case "tool":
             # print(message)
             if message["tool_call_id"] is None:
                 raise ValueError("`tool_call_id` should be specified for OpenAI.")
             return ChatCompletionToolMessageParam(
-                content=message["error"] or message["content"],
+                content=message["error"] or _content_as_str(message) or "",
                 tool_call_id=message["tool_call_id"],
                 role="tool",
                 name=message["tool_call"].function,  # type: ignore -- this is actually used, and is important!
@@ -84,7 +90,11 @@ def _openai_to_assistant_message(message: ChatCompletionMessage) -> ChatAssistan
         tool_calls = [_openai_to_tool_call(tool_call) for tool_call in message.tool_calls]
     else:
         tool_calls = None
-    return ChatAssistantMessage(role="assistant", content=message.content, tool_calls=tool_calls)
+    return ChatAssistantMessage(
+        role="assistant",
+        content=[text_content_block_from_string(message.content)] if message.content is not None else None,
+        tool_calls=tool_calls,
+    )
 
 
 def _function_to_openai(f: Function) -> ChatCompletionToolParam:

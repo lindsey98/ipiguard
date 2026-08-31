@@ -30,12 +30,13 @@ from agentdojo.ast_utils import (
     parse_tool_calls_from_python_function,
 )
 from agentdojo.functions_runtime import EmptyEnv, Env, Function, FunctionsRuntime, FunctionCall
-from agentdojo.types import ChatAssistantMessage, ChatMessage, ChatSystemMessage, ChatToolResultMessage, ChatUserMessage
+from agentdojo.types import ChatAssistantMessage, ChatMessage, ChatSystemMessage, ChatToolResultMessage, ChatUserMessage, get_text_content_as_str, text_content_block_from_string
 
 from agentdojo.default_suites.v1.tools.tool_white_list import whitelist
 
 def _openai_to_assistant_message(message: ChatCompletionMessage) -> ChatAssistantMessage:
-    return ChatAssistantMessage(role="assistant", content=message.content, tool_calls=None)
+    content = [text_content_block_from_string(message.content)] if message.content is not None else None
+    return ChatAssistantMessage(role="assistant", content=content, tool_calls=None)
 
 
 # Some local models (e.g. Qwen3 served through vLLM's hermes template) leak raw
@@ -69,7 +70,7 @@ def _tool_call_to_str(tool_call: FunctionCall, error=None) -> str:
 def _tool_returned_data_to_str(message: ChatToolResultMessage) -> str:
     tool_returned_data_dict = {
         "function": message["tool_call"].function,
-        "returned_data": message["content"],
+        "returned_data": get_text_content_as_str(message["content"]),
         "id": message["tool_call_id"]
     }
     return json.dumps(tool_returned_data_dict, indent=2)
@@ -270,7 +271,7 @@ class OpenAIConstructLLM(OpenAILLM):
 
 
         message_content = f"{tool_calling_prompt}\n{self._construct_dag_prompt}"
-        return ChatSystemMessage(role="system", content=message_content)
+        return ChatSystemMessage(role="system", content=[text_content_block_from_string(message_content)])
 
     def query(
         self,
@@ -289,10 +290,13 @@ class OpenAIConstructLLM(OpenAILLM):
         pre_plan = completion.choices[0].message.content
         prompt_tokens, completion_tokens = completion.usage.prompt_tokens, completion.usage.completion_tokens
         add_tokens(extra_args=extra_args, prompt_tokens=prompt_tokens, completion_tokens=completion_tokens)
-        user_message["content"] += f"\nThese information maybe helpful for you to complete the DAG:\n{pre_plan}"
+        user_message["content"] = [
+            *user_message["content"],
+            text_content_block_from_string(f"These information maybe helpful for you to complete the DAG:\n{pre_plan}"),
+        ]
 
         construct_system_message = self._get_system_message(system_message, list(runtime.functions.values()))
-        openai_messages = [_message_to_openai(construct_system_message), _message_to_openai(user_message)]
+        openai_messages = [_message_to_openai(construct_system_message, self.model), _message_to_openai(user_message, self.model)]
     
         dag_data = chat_completion_json(self.client, self.model, openai_messages, self.temperature, extra_args)
 
@@ -446,7 +450,7 @@ class OpenAITraverseLLM(OpenAILLM):
         return tool_returned_data
 
     def _prepare_system_prompt(self) -> str:
-        return ChatSystemMessage(role="system", content=self._args_update_prompt)
+        return ChatSystemMessage(role="system", content=[text_content_block_from_string(self._args_update_prompt)])
 
     def _prepare_user_prompt(self, 
                               messages: Sequence[ChatMessage], 
@@ -464,7 +468,7 @@ class OpenAITraverseLLM(OpenAILLM):
 
         # print(f"USER MESSAGE: {user_message}")
         # Extract the function name from the tool call
-        return ChatUserMessage(role="user", content=user_message)
+        return ChatUserMessage(role="user", content=[text_content_block_from_string(user_message)])
     
     def _prepare_history_prompt(self, tool_call, error_messages=[], fix=False) -> ChatUserMessage | None:
         if fix: 
@@ -476,7 +480,7 @@ class OpenAITraverseLLM(OpenAILLM):
             user_message = self._history_fix_prompt + f"<error_messages>\n{error_text}</error_messages>\n" + f"\nThe parameters of the following tool call need to be updated based on the error messages and the data returned from the previous tools:" + _tool_call_to_str(tool_call=tool_call)
         else:
             user_message = self._history_update_prompt + "\nThe parameters of the following tool call need to be updated based on the data returned from the previous tools:" + _tool_call_to_str(tool_call=tool_call)
-        return ChatUserMessage(role="user", content=user_message)
+        return ChatUserMessage(role="user", content=[text_content_block_from_string(user_message)])
 
     def _prepare_expansion_prompt(self, dag, user_task, tools) -> ChatUserMessage | None:
         user_message = f"{self._history_expansion_prompt}\n" \
@@ -484,7 +488,7 @@ class OpenAITraverseLLM(OpenAILLM):
             + f"The user task is: {user_task}\n" \
             + f"The current tool calls:\n{self._dag_to_json_str(dag)}"
         
-        return ChatUserMessage(role="user", content=user_message)
+        return ChatUserMessage(role="user", content=[text_content_block_from_string(user_message)])
 
     def _dag_to_json_str(self, dag: nx.DiGraph) -> str:
         tool_calls = []
@@ -532,7 +536,7 @@ class OpenAITraverseLLM(OpenAILLM):
 
         user_message = self._prepare_history_prompt(tool_call)
         history = [*messages, user_message]
-        openai_messages = [_message_to_openai(message) for message in history]
+        openai_messages = [_message_to_openai(message, self.model) for message in history]
 
         try:
             response = chat_completion_json(self.client, self.model, openai_messages, self.temperature, extra_args)
@@ -578,8 +582,8 @@ class OpenAITraverseLLM(OpenAILLM):
         extra_args: dict = {},
     ) -> tuple[str, FunctionsRuntime, Env, Sequence[ChatMessage], dict]:
         user_message = self._prepare_expansion_prompt(extra_args['dag'], query, get_tool_docs(list(runtime.functions.values())))
-        openai_messages = [_message_to_openai(message) for message in messages]
-        openai_messages.append(_message_to_openai(user_message))
+        openai_messages = [_message_to_openai(message, self.model) for message in messages]
+        openai_messages.append(_message_to_openai(user_message, self.model))
 
         try:
             response = chat_completion_json(self.client, self.model, openai_messages, self.temperature, extra_args)
@@ -602,7 +606,7 @@ class OpenAITraverseLLM(OpenAILLM):
         messages: Sequence[ChatMessage] = [],
         extra_args: dict = {},
     ) -> tuple[str, FunctionsRuntime, Env, Sequence[ChatMessage], dict]:
-        openai_messages = [_message_to_openai(message) for message in messages]
+        openai_messages = [_message_to_openai(message, self.model) for message in messages]
         # Local / open models (e.g. Qwen3, Llama) tend to leak tool-call markup
         # into the final answer. Steer this last turn toward a plain natural-language
         # answer. Hosted GPT/Claude models are left untouched to preserve the
@@ -624,7 +628,11 @@ class OpenAITraverseLLM(OpenAILLM):
         prompt_tokens, completion_tokens = completion.usage.prompt_tokens, completion.usage.completion_tokens
         add_tokens(extra_args=extra_args, prompt_tokens=prompt_tokens, completion_tokens=completion_tokens)
         content = _strip_tool_call_markup(completion.choices[0].message.content)
-        assistant_message = ChatAssistantMessage(role="assistant", content=content, tool_calls=None)
+        assistant_message = ChatAssistantMessage(
+            role="assistant",
+            content=[text_content_block_from_string(content)] if content is not None else None,
+            tool_calls=None,
+        )
         return query, runtime, env, [*messages, assistant_message], extra_args
 
     def query_reflection(
@@ -640,7 +648,7 @@ class OpenAITraverseLLM(OpenAILLM):
         
         user_message = self._prepare_history_prompt(tool_call, error_messages=error_messages, fix=True)
         history = [*messages, user_message]
-        openai_messages = [_message_to_openai(message) for message in history]
+        openai_messages = [_message_to_openai(message, self.model) for message in history]
 
         try:
             response = chat_completion_json(self.client, self.model, openai_messages, self.temperature, extra_args)
