@@ -1,0 +1,26 @@
+# Byte-compiled / optimized / cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+*.egg-info/
+build/
+dist/
+.eggs/
+
+# Environments / secrets
+.env
+.venv/
+venv/
+
+# Evaluation outputs / logs
+logs/
+eval_logs/
+evaluation_results/
+runs/
+
+# OS / editor cruft
+.DS_Store
+.idea/
+.vscode/
