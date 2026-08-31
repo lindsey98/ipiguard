@@ -253,7 +253,8 @@ if __name__ == '__main__':
     with OutputLogger(logdir=logdir):
         for suite_n in tqdm(script_args.suite_name):
             suite = get_suite(script_args.benchmark_version, suite_n)
-            model = ModelsEnum(script_args.agent_model)
+            # accept an optional "provider:" prefix (e.g. "local:Qwen3.6-35B-A3B")
+            model = ModelsEnum(script_args.agent_model.split(":")[-1])
 
             # Initialization
             if script_args.defense_name == "None":

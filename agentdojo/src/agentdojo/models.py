@@ -53,6 +53,8 @@ class ModelsEnum(StrEnum):
     QWEN_2_5_72B = "Qwen/Qwen2.5-72B-Instruct"
     QWEN_3_30B_LOCAL = "Qwen3-30B-A3B-Instruct-2507"
     """Qwen3 30B A3B Instruct served locally via an OpenAI-compatible server"""
+    QWEN_3_6_35B_LOCAL = "Qwen3.6-35B-A3B"
+    """Qwen3.6 35B A3B served locally via an OpenAI-compatible server"""
     DEEPSEEK_V3 = "deepseek-ai/DeepSeek-V3"
     """DeepSeek V3"""
     DEEPSEEK_R1 = "deepseek-ai/DeepSeek-R1"
@@ -103,6 +105,7 @@ MODEL_PROVIDERS = {
     ModelsEnum.QWEN_2_5_32B: "qdd",
     ModelsEnum.QWEN_2_5_72B: "qdd",
     ModelsEnum.QWEN_3_30B_LOCAL: "local",
+    ModelsEnum.QWEN_3_6_35B_LOCAL: "local",
     ModelsEnum.DEEPSEEK_LLAMA: "vllm",
     ModelsEnum.PHI_4: "vllm",
     ModelsEnum.DEEPSEEK_V3: "deepseek",
@@ -141,6 +144,7 @@ MODEL_NAMES = {
     "meta-llama/Llama-3.1-8B-Instruct": "Llama",
     "meta-llama/Llama-2-7b-chat-hf": "AI assistant",
     "Qwen3-30B-A3B-Instruct-2507": "Qwen created by Alibaba Cloud.",
+    "Qwen3.6-35B-A3B": "Qwen created by Alibaba Cloud.",
     "Qwen/Qwen2.5-7B-Instruct": "Qwen created by Alibaba Cloud.",
     "Qwen/Qwen2.5-32B-Instruct": "Qwen created by Alibaba Cloud.",
     "Qwen/Qwen2.5-72B-Instruct": "Qwen created by Alibaba Cloud.",
