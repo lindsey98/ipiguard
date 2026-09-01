@@ -192,7 +192,7 @@ bash eval.sh
 | Argument          | Description                                                                                       |
 |-------------------|---------------------------------------------------------------------------------------------------|
 | `--agent_model`   | Agent model used for evaluation (e.g. `claude-sonnet-4-5-20250929`, `gpt-4o-mini-2024-07-18`, `Llama-3.3-70B-Instruct`). |
-| `--attack_name`   | Adversarial attack to simulate. `important_instructions` (default); [ChatInject](https://github.com/hwanchang00/ChatInject) chat-template attacks: `chat_inject_qwen3` / `chat_inject_glm` (single-turn) and their `_with_utility_system_multiturn_7` / `_with_utility_authority_endorsement_system_multiturn_7` variants; or [ASB](https://github.com/agiresearch/ASB) observation prompt injection: `asb_opi_naive`, `asb_opi_fake_completion`, `asb_opi_escape_characters`, `asb_opi_context_ignoring`, `asb_opi_combined_attack`. Ignored in `benign` mode. |
+| `--attack_name`   | Adversarial attack to simulate. `important_instructions` (default), or [ChatInject](https://github.com/hwanchang00/ChatInject) chat-template attacks: `chat_inject_qwen3` / `chat_inject_glm` (single-turn), and their `_with_utility_system_multiturn_7` / `_with_utility_authority_endorsement_system_multiturn_7` variants. Ignored in `benign` mode. |
 | `--defense_name`  | Defense strategy: `ipiguard` for the proposed defense, or `None` for the original (undefended) model. |
 | `--suite_name`    | Task suite/domain: `travel`, `workspace`, `slack`, `banking` (AgentDojo); `shopping`, `github`, `dailylife` (AgentDyn); or a group: `all` (AgentDojo), `agentdyn`, `everything`. |
 | `--benchmark_version` | Suite version (default `v1.2`). The AgentDyn suites are unversioned and available under every version. |
@@ -203,3 +203,31 @@ bash eval.sh
 
 Each run prints and saves **ASR** (Attack Success Rate ↓, lower is better) and **Utility** (task success ↑,
 higher is better) per suite and overall.
+
+
+## 🧪 ASB (Agent Security Bench)
+
+The `ASB/` directory vendors the full [Agent Security Bench](https://github.com/agiresearch/ASB)
+framework — a standalone agent-security benchmark on its own `pyopenagi`/AIOS runtime (not AgentDojo),
+with its own agents, ReAct loop, attacker tools, and config-driven runner. IPIGuard is integrated into
+ASB as a defense, so it can be evaluated against ASB's **Observation Prompt Injection (OPI)** attack.
+
+**IPIGuard in ASB** ([`ASB/pyopenagi/agents/ipiguard.py`](ASB/pyopenagi/agents/ipiguard.py)): ASB's
+ReAct agent commits to a `workflow` plan before running any tools. IPIGuard treats that plan as the
+committed tool trajectory and, at runtime, authorizes a tool call only if it is the next planned tool
+**or** a read-only ("Read") tool; any off-plan state-changing call — i.e. an action injected via a
+tool observation — is **deferred** instead of executed. This mirrors IPIGuard's planned-DAG + read-only
+whitelist semantics from the AgentDojo side.
+
+```bash
+cd ASB
+pip install -r requirements.txt
+
+# OPI attack + IPIGuard defense (edit the config's `llms:` to point at your served model)
+python scripts/agent_attack.py --cfg_path config/OPI_ipiguard.yml
+# OPI attack, no defense (baseline):
+# python scripts/agent_attack.py --cfg_path config/OPI.yml
+```
+
+Set `defense_type: ipiguard` in any ASB config to enable the defense. Runtime artifacts
+(`ASB/memory_db/`, `ASB/logs/`) are gitignored and regenerated on first run.

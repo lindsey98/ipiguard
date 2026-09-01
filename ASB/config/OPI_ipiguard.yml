@@ -1,0 +1,22 @@
+injection_method: observation_prompt_injection
+
+defense_type: ipiguard   # IPIGuard: commit to the workflow plan, defer off-plan state-changing calls
+
+attack_tool:
+  - all
+  # - agg
+  # - non-agg
+
+llms:
+  # - gpt-4o-mini
+  # - gpt-4o-2024-08-06
+  # - claude-3-5-sonnet-20240620
+  - ollama/qwen2:72b
+  # Point this at your served model (e.g. a local vLLM OpenAI-compatible endpoint).
+
+attack_types:
+  - context_ignoring
+  # - combined_attack
+  # - fake_completion
+  # - escape_characters
+  # - naive
