@@ -314,17 +314,18 @@ class ReactAgentAttack(BaseAgent):
             workflow = self.manual_workflow()
 
 
+        # IPIGuard commits to the CLEAN plan (from the benign workflow) BEFORE the attacker tool is
+        # injected into it. This is essential: attacker_tool_injection below adds the attacker tool to
+        # every step's tool_use, so committing after it would make the injected action look "on-plan"
+        # and defeat the defense. (Same ordering as DRIFT: capture the plan, then inject.)
+        if self.ipiguard_agent is not None and workflow:
+            self.ipiguard_agent.set_plan(workflow)
+
         if workflow:
             ## Attacker tool injection to each stage of workflow
             if self.args.observation_prompt_injection or self.args.direct_prompt_injection:
                 workflow = self.attacker_tool_injection(workflow)
                 # self.logger.log(f"Attacker Tool has been injected to workflow.\n", level="info")
-
-
-        # IPIGuard commits to the plan trajectory BEFORE any tool runs; only planned (or read-only)
-        # tools are authorized at runtime, so injected observations cannot add new actions.
-        if self.ipiguard_agent is not None and workflow:
-            self.ipiguard_agent.set_plan(workflow)
 
         self.messages.append({"role": "assistant", "content": f"[Thinking]: The workflow generated for the problem is {json.dumps(workflow)}"})
 
