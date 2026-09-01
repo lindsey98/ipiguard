@@ -192,7 +192,7 @@ bash eval.sh
 | Argument          | Description                                                                                       |
 |-------------------|---------------------------------------------------------------------------------------------------|
 | `--agent_model`   | Agent model used for evaluation (e.g. `claude-sonnet-4-5-20250929`, `gpt-4o-mini-2024-07-18`, `Llama-3.3-70B-Instruct`). |
-| `--attack_name`   | Adversarial attack to simulate (e.g. `important_instructions`). Ignored in `benign` mode.          |
+| `--attack_name`   | Adversarial attack to simulate. `important_instructions` (default), or [ChatInject](https://github.com/hwanchang00/ChatInject) chat-template attacks: `chat_inject_qwen3` / `chat_inject_glm` (single-turn), and their `_with_utility_system_multiturn_7` / `_with_utility_authority_endorsement_system_multiturn_7` variants. Ignored in `benign` mode. |
 | `--defense_name`  | Defense strategy: `ipiguard` for the proposed defense, or `None` for the original (undefended) model. |
 | `--suite_name`    | Task suite/domain: `travel`, `workspace`, `slack`, `banking` (AgentDojo); `shopping`, `github`, `dailylife` (AgentDyn); or a group: `all` (AgentDojo), `agentdyn`, `everything`. |
 | `--benchmark_version` | Suite version (default `v1.2`). The AgentDyn suites are unversioned and available under every version. |
