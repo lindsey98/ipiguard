@@ -2,9 +2,8 @@
 
 set -euo pipefail
 
-DEFENSE="${1:-}"                                   # "" (baseline), "camel", or "ipiguard"
-# NOTE: ipiguard is a plan-then-execute defense; it overrides WORKFLOW_MODE=react to
-# automatic at runtime (the react loop builds no committed plan to gate against).
+DEFENSE="${1:-}"                                   # "" (baseline) or "camel"
+# ipiguard: plan-then-execute defense; overrides WORKFLOW_MODE=react -> automatic at runtime.
 MODEL="${MODEL:-Qwen3.6-35B-A3B}"      # must match the vLLM --served-model-name
 ATTACK_TYPE="${ATTACK_TYPE:-context_ignoring}"
 ATTACKER_TOOLS="${ATTACKER_TOOLS:-data/all_attack_tools_non_aggressive.jsonl}"  # small slice for a smoke test
@@ -18,9 +17,14 @@ OPI_INJECT_LIMIT="${OPI_INJECT_LIMIT:-1}"
 # Resume by default: tasks whose JSON trace already exists are skipped (reusing their metrics).
 # Set FORCE_RERUN=1 to recompute everything from scratch.
 FORCE_RERUN="${FORCE_RERUN:-}"
-# CLEAN=1 runs with NO attack (no OPI injection, no attacker tool) to measure the clean-utility
-# ceiling. Traces go to a separate <workflow>_clean label, and each task runs once (not per tool).
-CLEAN="${CLEAN:-}"
+# For a no-attack (clean) utility run, use the dedicated scripts/run_clean.sh instead.
+# Concurrent tasks. ASB's original 5000 exhausts file descriptors and overloads the LLM server;
+# keep it modest and match it to what your SGLang endpoint can handle.
+MAX_WORKERS="${MAX_WORKERS:-16}"
+# Where the per-task JSON traces go. Top dir encodes the run: <model>_nodefense or <model>+<defense>,
+# e.g. logs/Qwen3.6-35B-A3B_nodefense/... and logs/Qwen3.6-35B-A3B+camel/...
+if [ -n "$DEFENSE" ]; then _PIPE="${MODEL}+${DEFENSE}"; else _PIPE="${MODEL}_nodefense"; fi
+LOG_DIR="${LOG_DIR:-logs/$_PIPE}"
 # Reasoning models (Qwen3 with --reasoning-parser) spend tokens on <think> before the tool call;
 # ASB's default 256 truncates them. Bump the generation budget.
 MAX_NEW_TOKENS="${MAX_NEW_TOKENS:-2048}"
@@ -55,7 +59,7 @@ DEFENSE_ARG=()
 [ -n "$DEFENSE" ] && DEFENSE_ARG=(--defense_type "$DEFENSE")
 [ -n "$FORCE_RERUN" ] && DEFENSE_ARG+=(--force_rerun)
 
-echo "Model=$MODEL  attack_type=$ATTACK_TYPE  defense=${LABEL}  attacker_tools=$ATTACKER_TOOLS"
+echo "Model=$MODEL  attack_type=$ATTACK_TYPE  run=${LABEL}  attacker_tools=$ATTACKER_TOOLS"
 python main_attacker.py \
   --llm_name "$MODEL" \
   --use_backend local \
@@ -66,6 +70,8 @@ python main_attacker.py \
   --workflow_mode "$WORKFLOW_MODE" \
   --react_max_turns "$REACT_MAX_TURNS" \
   --opi_inject_limit "$OPI_INJECT_LIMIT" \
+  --max_workers "$MAX_WORKERS" \
+  ${LOG_DIR:+--log_dir "$LOG_DIR"} \
   --max_new_tokens "$MAX_NEW_TOKENS" \
   --database /nonexistent_no_memory_db \
   --res_file "$RES" \
