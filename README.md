@@ -207,27 +207,32 @@ higher is better) per suite and overall.
 
 ## 🧪 ASB (Agent Security Bench)
 
-The `ASB/` directory vendors the full [Agent Security Bench](https://github.com/agiresearch/ASB)
-framework — a standalone agent-security benchmark on its own `pyopenagi`/AIOS runtime (not AgentDojo),
-with its own agents, ReAct loop, attacker tools, and config-driven runner. IPIGuard is integrated into
-ASB as a defense, so it can be evaluated against ASB's **Observation Prompt Injection (OPI)** attack.
+The `ASB/` directory vendors an **Observation Prompt Injection (OPI)** slice of
+[Agent Security Bench](https://github.com/agiresearch/ASB) — a standalone agent-security benchmark on
+its own `pyopenagi`/AIOS runtime (not AgentDojo). It is adapted to run on locally-served, OpenAI-
+compatible models (e.g. a vLLM/SGLang endpoint via `LOCAL_BASE_URL`/`LOCAL_API_KEY`), and carries two
+defenses to compare against the undefended baseline: **CaMeL** and **IPIGuard**.
 
-**IPIGuard in ASB** ([`ASB/pyopenagi/agents/ipiguard.py`](ASB/pyopenagi/agents/ipiguard.py)): ASB's
-ReAct agent commits to a `workflow` plan before running any tools. IPIGuard treats that plan as the
-committed tool trajectory and, at runtime, authorizes a tool call only if it is the next planned tool
-**or** a read-only ("Read") tool; any off-plan state-changing call — i.e. an action injected via a
-tool observation — is **deferred** instead of executed. This mirrors IPIGuard's planned-DAG + read-only
-whitelist semantics from the AgentDojo side.
+**IPIGuard in ASB** ([`ASB/pyopenagi/agents/ipiguard.py`](ASB/pyopenagi/agents/ipiguard.py)): in ASB's
+plan-then-execute mode the agent commits to a `workflow` plan before running any tools. IPIGuard
+captures that plan as the committed tool trajectory (**before** the attacker tool is injected into it),
+and at runtime authorizes a tool call only if it is the next planned tool **or** a read-only ("Read")
+tool; any off-plan state-changing call — i.e. an action injected via a tool observation — is
+**deferred** instead of executed. This mirrors IPIGuard's planned-DAG + read-only whitelist semantics
+from the AgentDojo side. IPIGuard is inherently plan-then-execute, so it forces `workflow_mode=automatic`
+(it does not apply to the dynamic `react` loop, which builds no committed plan to gate).
 
 ```bash
 cd ASB
-pip install -r requirements.txt
+pip install -r requirements-opi.txt   # OPI-slice deps (+ set LOCAL_BASE_URL to your served model)
 
-# OPI attack + IPIGuard defense (edit the config's `llms:` to point at your served model)
-python scripts/agent_attack.py --cfg_path config/OPI_ipiguard.yml
-# OPI attack, no defense (baseline):
-# python scripts/agent_attack.py --cfg_path config/OPI.yml
+# One-stop runner (edit MODEL / knobs at the top of the script):
+bash scripts/run_opi.sh              # undefended baseline (confirm ASR > 0 first)
+bash scripts/run_opi.sh camel        # CaMeL defense
+bash scripts/run_opi.sh ipiguard     # IPIGuard defense
+
+# Or via config:  python scripts/agent_attack.py --cfg_path config/OPI_ipiguard.yml
 ```
 
-Set `defense_type: ipiguard` in any ASB config to enable the defense. Runtime artifacts
-(`ASB/memory_db/`, `ASB/logs/`) are gitignored and regenerated on first run.
+Set `defense_type: ipiguard` in any ASB OPI config to enable the defense. Runtime artifacts
+(`ASB/logs/`, caches) are gitignored.

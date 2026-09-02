@@ -60,7 +60,7 @@ class IPIGuard:
         for _ in range(3):
             try:
                 response = self.client.chat.completions.create(
-                    model=self.model, messages=messages, max_tokens=100
+                    model=self.model, messages=messages, max_tokens=512
                 )
                 choice = response.choices[0].message.content or ""
                 if any(c in choice for c in ("A", "B", "C")):
