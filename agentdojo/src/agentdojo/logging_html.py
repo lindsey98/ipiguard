@@ -99,17 +99,27 @@ def _render_messages(messages: list) -> str:
         cls = {"system": "sys", "user": "usr", "assistant": "ast", "tool": "tool"}.get(role, "sys")
         text = _content_to_text(m.get("content") if isinstance(m, dict) else None)
         inner = [f'<span class="role">{_esc(role)}</span>']
-        if text.strip():
-            inner.append(f"<div>{_esc(text)}</div>")
-        if role == "assistant":
-            tcs = m.get("tool_calls") if isinstance(m, dict) else None
-            if tcs:
-                inner.append(_render_tool_calls(tcs))
         if role == "tool":
+            # Put the tool's returned data (or error) into the result box, not a plain div.
             err = m.get("error") if isinstance(m, dict) else None
-            box_cls = "errresult" if err else "result"
-            label = f"error: {err}" if err else "returned"
-            inner.append(f'<code class="box {box_cls}">{_esc(label)}</code>')
+            fn = ""
+            tc = m.get("tool_call") if isinstance(m, dict) else None
+            if isinstance(tc, dict):
+                fn = tc.get("function") or tc.get("function_name") or ""
+            elif tc is not None:
+                fn = getattr(tc, "function", "")
+            if fn:
+                inner.append(f'<div class="small">{_esc(fn)} returned:</div>')
+            if err:
+                inner.append(f'<code class="box errresult">error: {_esc(err)}</code>')
+            inner.append(f'<code class="box result">{_esc(text) if text.strip() else "(empty)"}</code>')
+        else:
+            if text.strip():
+                inner.append(f"<div>{_esc(text)}</div>")
+            if role == "assistant":
+                tcs = m.get("tool_calls") if isinstance(m, dict) else None
+                if tcs:
+                    inner.append(_render_tool_calls(tcs))
         parts.append(f'<div class="msg {cls}">{"".join(inner)}</div>')
     return "".join(parts)
 
