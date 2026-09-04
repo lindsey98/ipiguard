@@ -127,25 +127,29 @@ def _render_preplan(data: dict) -> str:
     )
 
 
-def _render_dag(data: dict) -> str:
+def _render_plan(data: dict) -> str:
+    """Top card: only the committed plan (initial DAG). Runtime activity goes below the messages."""
+    initial = data.get("initial_dag")
+    if not initial:
+        return ""
+    return (
+        '<div class="msg dagcard"><span class="role">IPIGuard · committed plan (initial DAG)</span>'
+        '<div class="small">The tool-dependency plan fixed BEFORE any tool runs. Runtime-discovered '
+        'calls are gated against it below (read-only execute, state-changing are deferred).</div>'
+        f'<code class="box dagbox">{_esc(_pretty(initial))}</code></div>'
+    )
+
+
+def _render_runtime(data: dict) -> str:
+    """Runtime trace section (after the message stream): expanded DAG, gated runtime calls, events."""
     initial = data.get("initial_dag")
     expanded = data.get("expanded_dag")
     events = data.get("dag_events")
     new_calls = data.get("new_tool_calls")
-    if not any([initial, expanded, events, new_calls]):
+    if not any([expanded and expanded != initial, events, new_calls]):
         return ""
 
-    body = [
-        '<div class="msg dagcard"><span class="role">IPIGuard · tool-dependency DAG</span>',
-        '<div class="small">The plan committed BEFORE any tool runs. Runtime-discovered calls are gated: '
-        'read-only (whitelisted) execute, state-changing ones are deferred.</div>',
-    ]
-    if initial:
-        body.append('<div class="small" style="margin-top:6px">Committed plan (initial DAG):</div>')
-        body.append(f'<code class="box dagbox">{_esc(_pretty(initial))}</code>')
-    if expanded and expanded != initial:
-        body.append('<div class="small" style="margin-top:6px">Expanded DAG (after arg resolution):</div>')
-        body.append(f'<code class="box dagbox">{_esc(_pretty(expanded))}</code>')
+    body = ['<div class="msg dagcard"><span class="role">IPIGuard · runtime trace</span>']
     if new_calls:
         rows = []
         for c in new_calls:
@@ -159,8 +163,11 @@ def _render_dag(data: dict) -> str:
                 f'<code class="box {cls}">[{_esc(status)}] {_esc(fn)}({_esc(_pretty(args))})</code>'
             )
         if rows:
-            body.append('<div class="small" style="margin-top:6px">Runtime-discovered tool calls (gating):</div>')
+            body.append('<div class="small">Runtime-discovered tool calls (gating):</div>')
             body.extend(rows)
+    if expanded and expanded != initial:
+        body.append('<div class="small" style="margin-top:6px">Expanded DAG (after arg resolution):</div>')
+        body.append(f'<code class="box dagbox">{_esc(_pretty(expanded))}</code>')
     if events:
         ev_lines = []
         for e in events:
@@ -215,8 +222,9 @@ def render_trace_html(data: dict) -> str:
         f'<div class="title">{title}</div>'
         f'<div class="subnote">{subnote}</div>'
         f"{_render_preplan(data)}"
-        f"{_render_dag(data)}"
+        f"{_render_plan(data)}"
         f"{_render_messages(data.get('messages', []))}"
+        f"{_render_runtime(data)}"
         f'<div class="flag">utility {_flag(util)} · security {_flag(sec)}</div>'
         "</div></body></html>"
     )
