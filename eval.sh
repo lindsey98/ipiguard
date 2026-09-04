@@ -17,3 +17,4 @@ python3 run/eval.py \
     --defense_name "$defense_name" \
     --output_dir "$output_dir" \
     --mode "$mode"
+# Add --html True to also write a rendered <task>.html next to each <task>.json trace.

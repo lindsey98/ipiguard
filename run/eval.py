@@ -150,6 +150,10 @@ class ScriptArguments:
     force_rerun: Optional[bool] = field(
         default=False, metadata={"help": "if True, rerun even if output already exists"}
     )
+    html: Optional[bool] = field(
+        default=False,
+        metadata={"help": "if True, also write a rendered .html next to each .json trace"},
+    )
 
 def _cached_result(script_args, pipeline_name, suite_name, user_task_id, attack_type, injection_task_id):
     """Return (task_reward, utility) from an existing trace JSON, or None to (re)run.
@@ -304,6 +308,10 @@ if __name__ == '__main__':
     load_dotenv()
     parser = HfArgumentParser(ScriptArguments)
     script_args: ScriptArguments = parser.parse_args_into_dataclasses()[0]
+
+    # opt-in HTML trace rendering (TraceLogger.save reads this env var)
+    if script_args.html:
+        os.environ["AGENTDOJO_TRACE_HTML"] = "1"
 
     # Pipeline name == top-level log directory, AgentDojo style:
     #   {output_dir}/{pipeline_name}/{suite}/{user_task}/{attack_type}/{injection}.json

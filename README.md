@@ -200,6 +200,7 @@ bash eval.sh
 | `--output_dir`    | Directory to store evaluation results (JSON logs + per-suite ASR/Utility).                          |
 | `--uid` / `--iid` | Debug filters: run only the given user-task / injection-task ID.                                    |
 | `--force_rerun`   | Rerun tasks even when a completed trace JSON already exists in `output_dir` (by default completed tasks are skipped and their recorded results reused). |
+| `--html`          | Also write a rendered `<task>.html` next to each `<task>.json` trace (pre-plan, committed DAG, runtime tool-call gating, message stream). Off by default. |
 
 Each run prints and saves **ASR** (Attack Success Rate ↓, lower is better) and **Utility** (task success ↑,
 higher is better) per suite and overall.
