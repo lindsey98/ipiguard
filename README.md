@@ -75,16 +75,15 @@ cd ipiguard
 conda create -n ipiguard python=3.10
 conda activate ipiguard
 
-# install the bundled agentdojo (editable). This vendored copy is based on
-# agentdojo 0.1.35 and already includes the AgentDyn suites (shopping, github,
-# dailylife) — no separate AgentDyn installation is needed.
-cd agentdojo
-pip install -e .
-cd ..
+# install the unified agentdojo package (includes the IPIGuard defense, the AgentDyn
+# suites — shopping, github, dailylife — and the data-only / ChatInject attacks).
+pip install "git+https://github.com/lindsey98/agentdojo@ipiguard-integration"
 ```
 
-> Upgrading from an older checkout? Re-run `pip install -e .` inside `agentdojo/` — the
-> 0.1.35 base adds dependencies such as `google-genai` and `deepdiff`.
+> The agentdojo backend now lives in its own repo
+> ([lindsey98/agentdojo](https://github.com/lindsey98/agentdojo)) instead of being vendored here.
+> Upgrading from an older checkout that had a local `agentdojo/`? Uninstall the old editable copy
+> first: `pip uninstall -y agentdojo`, then run the install above.
 
 
 ## 🔑 Setup API Keys
