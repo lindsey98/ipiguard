@@ -65,15 +65,17 @@ class AgentTask:
         return 1 - int(security), int(utility), messages, args
 
     @staticmethod
-    def run(agent_pipeline, suite, attacks, user_task, injection_task, extra_args):
+    def run(agent_pipeline, suite, attacks, user_task, injection_task, extra_args, security_check_fn=None):
+        inj_id = injection_task.ID if injection_task is not None else "data_injection"
         try:
             utility, security, messages, args = suite.run_task_with_pipeline_msg(
-                agent_pipeline, user_task, injection_task, attacks, extra_args={"input_tokens": 0, "output_tokens": 0}
+                agent_pipeline, user_task, injection_task, attacks,
+                extra_args={"input_tokens": 0, "output_tokens": 0}, security_check_fn=security_check_fn,
             )
         except BadRequestError as e:
             if e.code == "context_length_exceeded" or e.param == "max_tokens":
                 print(
-                    f"Skipping task '{user_task.ID}' with '{injection_task.ID}' due to context_length_exceeded: {e}"
+                    f"Skipping task '{user_task.ID}' with '{inj_id}' due to context_length_exceeded: {e}"
                 )
                 utility = False
                 security = True
@@ -87,7 +89,7 @@ class AgentTask:
         except ApiError as e:
             if "internal server error" in str(e):
                 print(
-                    f"Skipping task '{user_task.ID}' with '{injection_task.ID}' because of internal server error: {e}"
+                    f"Skipping task '{user_task.ID}' with '{inj_id}' because of internal server error: {e}"
                 )
                 utility = False
                 security = True
@@ -97,7 +99,7 @@ class AgentTask:
                 raise e
         except InternalServerError as e:
                     print(
-                        f"Skipping task '{user_task.ID}' with '{injection_task.ID}' because of internal server error: {e}"
+                        f"Skipping task '{user_task.ID}' with '{inj_id}' because of internal server error: {e}"
                     )
                     utility = False
                     security = True
@@ -105,7 +107,7 @@ class AgentTask:
                     args = {"input_tokens": 0, "output_tokens": 0}
         except MalformedModelOutputError as e:
             print(
-                f"Skipping task '{user_task.ID}' with '{injection_task.ID}' because of malformed model output: {e}"
+                f"Skipping task '{user_task.ID}' with '{inj_id}' because of malformed model output: {e}"
             )
             utility = False
             security = True
@@ -148,7 +150,7 @@ def parse_args():
     p.add_argument("-it", "--injection-task", dest="injection_tasks", action="append", default=None,
                    help="injection task(s) to run, repeatable (e.g. -it 1 or -it injection_task_1). "
                         "If omitted, all injection tasks in the suite are run.")
-    p.add_argument("--force_rerun", dest="force_rerun", action="store_true",
+    p.add_argument("--force-rerun", dest="force_rerun", action="store_true",
                    help="rerun tasks even if a completed trace JSON already exists")
     p.add_argument("--html", action="store_true",
                    help="also write a rendered .html next to each .json trace")
@@ -260,7 +262,82 @@ def benign_eval(script_args, agent_pipeline, suite, agent_test_dataset, pipeline
 
 
 
+def _data_only_eval(script_args, agent_pipeline, suite, attacker, agent_test_dataset, pipeline_name):
+    """Evaluate a data-only attack (e.g. data_only_syntactic).
+
+    Data-only attacks don't inject via `attacker.attack()` (that returns {}). Instead the injected
+    data + per-case security check live on each user task as INJECTED_DATA_<SUB> / SECURITY_CHECKS_<SUB>.
+    Each INJECTED_DATA entry is one test case (injection_task_<idx>): inject it into the environment and
+    score with SECURITY_CHECKS_<SUB>[idx] (True = the injected data leaked = attack succeeded).
+    """
+    subcategory = attacker.subcategory
+    data_field = f"INJECTED_DATA_{subcategory}"
+    checks_field = f"SECURITY_CHECKS_{subcategory}"
+    user_task_ids = sorted({u for (u, _) in agent_test_dataset})
+
+    sum = security = useful = 0
+    for user_task_id in tqdm(user_task_ids, desc="Evaluating on the test dataset"):
+        if not _id_selected(script_args.user_tasks, user_task_id, "user_task_"):
+            continue
+        user_task = suite.get_user_task_by_id(f"user_task_{user_task_id}")
+        injected_list = getattr(user_task, data_field, None)
+        checks_list = getattr(user_task, checks_field, None)
+        if not injected_list or not checks_list:
+            print(f"Skipping {user_task.ID}: no {data_field}/{checks_field} (task not part of this data-only attack)")
+            continue
+
+        for idx, injected_data in enumerate(injected_list):
+            if not _id_selected(script_args.injection_tasks, idx, "injection_task_"):
+                continue
+            injection_task_id = f"injection_task_{idx}"
+            security_check_fn = checks_list[idx]
+
+            cached = _cached_result(
+                script_args, pipeline_name, suite.name, user_task.ID, script_args.attack_name, injection_task_id
+            )
+            if cached is not None:
+                task_reward, utility = cached
+                sum += 1
+                security += task_reward
+                useful += utility
+                continue
+
+            with TraceLogger(
+                delegate=Logger.get(),
+                suite_name=suite.name,
+                user_task_id=user_task.ID,
+                injection_task_id=injection_task_id,
+                injections=injected_data,
+                attack_type=script_args.attack_name,
+                pipeline_name=pipeline_name,
+            ) as logger:
+                task_reward, utility, history, args = AgentTask.run(
+                    agent_pipeline, suite, injected_data, user_task, None, extra_args={},
+                    security_check_fn=security_check_fn,
+                )
+                logger.set_contextarg("utility", bool(utility))
+                logger.set_contextarg("security", bool(task_reward))
+                _log_run_context(logger, args)
+
+            sum += 1
+            security += task_reward
+            useful += utility
+
+    if sum == 0:
+        raise ValueError(
+            f"No data-only cases matched in suite '{suite.name}' — no user task defines "
+            f"{data_field}/{checks_field} (or all were filtered out)."
+        )
+    asr = security * 100 / sum
+    ability = useful * 100 / sum
+    return security, useful, sum, asr, ability
+
+
 def eval(script_args, agent_pipeline, suite, attacker, agent_test_dataset, pipeline_name):
+    # Data-only attacks (attacker.attack() returns {}) use a separate injection + scoring path.
+    if getattr(attacker, "is_data_injection", False):
+        return _data_only_eval(script_args, agent_pipeline, suite, attacker, agent_test_dataset, pipeline_name)
+
     sum = 0
     security = 0
     useful = 0
