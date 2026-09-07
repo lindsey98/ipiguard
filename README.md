@@ -105,12 +105,12 @@ adversarial run on (omit it for the benign, no-attack run). Results always go un
 # Under attack (IPIGuard defense):
 python3 main.py Qwen3.6-35B-A3B --run-attack \
     --attack important_instructions \
-    --suites banking slack travel workspace \
+    --suite banking slack travel workspace \
     --defense ipiguard
 
 # No attack (benign) — same, minus --run-attack/--attack:
 python3 main.py Qwen3.6-35B-A3B \
-    --suites banking slack travel workspace \
+    --suite banking slack travel workspace \
     --defense ipiguard
 ```
 
@@ -119,7 +119,7 @@ python3 main.py Qwen3.6-35B-A3B \
   [API Keys](#-api-keys)).
 - `--defense None` runs the **original model** with no defense; `--defense ipiguard` runs the proposed
   defense.
-- `--suites` takes any AgentDojo suite (`banking slack travel workspace`) and/or AgentDyn suite
+- `--suite` takes any AgentDojo suite (`banking slack travel workspace`) and/or AgentDyn suite
   (`shopping github dailylife`), or a group: `all` (AgentDojo 4), `agentdyn` (3), `everything` (all 7).
 
 ### Using the shell script
@@ -135,7 +135,7 @@ trace JSONs are skipped). Edit the variables at the top and run `bash eval.sh`.
 | `--run-attack`    | Run under attack. Omit for the benign (no-attack) run.                                              |
 | `--attack`        | Adversarial attack to simulate (only with `--run-attack`). `important_instructions` (default), or [ChatInject](https://github.com/hwanchang00/ChatInject): `chat_inject_qwen3` / `chat_inject_glm` (single-turn) and their `_with_utility_system_multiturn_7` / `_with_utility_authority_endorsement_system_multiturn_7` variants. |
 | `--defense`       | `ipiguard` for the proposed defense, or `None` for the original (undefended) model.                |
-| `--suites`        | Space-separated suites: `banking slack travel workspace` (AgentDojo); `shopping github dailylife` (AgentDyn); or a group: `all`, `agentdyn`, `everything`. |
+| `--suite`        | Space-separated suites: `banking slack travel workspace` (AgentDojo); `shopping github dailylife` (AgentDyn); or a group: `all`, `agentdyn`, `everything`. |
 | `--benchmark-version` | Suite version (default `v1.2`). The AgentDyn suites are unversioned and available under every version. |
 | `--output_dir`    | Output directory (default `logs/`). JSON logs + per-suite ASR/Utility.                              |
 | `-ut` / `--user-task` | Debug: run only the given user-task id(s), repeatable (`-ut 0 -ut 3`).                          |

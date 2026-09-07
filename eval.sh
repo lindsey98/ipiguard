@@ -6,13 +6,13 @@ attack="important_instructions"
 
 # --- benign (no attack): drop --run-attack ---
 python3 main.py "$model" \
-    --suites $suites \
+    --suite $suites \
     --defense "$defense"
 
 # --- under attack: add --run-attack --attack <name> ---
 # python3 main.py "$model" \
 #     --run-attack --attack "$attack" \
-#     --suites $suites \
+#     --suite $suites \
 #     --defense "$defense"
 
 # Output always goes under logs/. Add --html to also write a rendered <task>.html per trace.

@@ -121,9 +121,9 @@ def parse_args():
 
     With attack:
         python main.py MODEL --run-attack --attack important_instructions \\
-            --suites banking slack travel workspace --defense ipiguard
+            --suite banking slack travel workspace --defense ipiguard
     Without attack (benign):
-        python main.py MODEL --suites banking slack travel workspace --defense ipiguard
+        python main.py MODEL --suite banking slack travel workspace --defense ipiguard
 
     MODEL is positional (e.g. Qwen3.6-35B-A3B, or local:Qwen3.6-35B-A3B, gpt-4o-mini-...).
     Output always goes under logs/ unless --output_dir is given.
@@ -134,9 +134,9 @@ def parse_args():
                    help="run under attack (omit for the benign, no-attack run)")
     p.add_argument("--attack", dest="attack_name", default="important_instructions",
                    help="attack name (only used with --run-attack), e.g. important_instructions")
-    p.add_argument("--suites", dest="suite_name", nargs="+",
+    p.add_argument("--suite", "--suites", dest="suite_name", nargs="+",
                    default=["banking", "slack", "travel", "workspace"],
-                   help="suites to run: banking slack travel workspace shopping github dailylife, "
+                   help="suite(s) to run: banking slack travel workspace shopping github dailylife, "
                         "or a group: all / agentdyn / everything")
     p.add_argument("--defense", dest="defense_name", default="ipiguard",
                    help="defense: None (original model) or ipiguard")
