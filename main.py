@@ -18,7 +18,6 @@ from agentdojo.models import ModelsEnum
 from agentdojo.task_suite.load_suites import get_suite, get_suites
 from agentdojo.task_suite.task_suite import TaskSuite
 from agentdojo.agent_pipeline.llms.ipiguard_llm import MalformedModelOutputError
-from agentdojo.attacks.agentic_attacks import AgenticAttack
 from agentdojo.functions_runtime import FunctionCall
 from data_module import AGENTDOJO_SUITES, AGENTDYN_SUITES, initialize_dataset
 from tqdm import tqdm
