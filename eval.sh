@@ -10,7 +10,7 @@ output_dir="logs/"
 
 mkdir -p "$output_dir"
 
-python3 run/eval.py \
+python3 eval.py \
     --suite_name "$suite_name" \
     --agent_model "$agent_model" \
     --attack_name "$attack_name" \

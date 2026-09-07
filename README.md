@@ -99,7 +99,7 @@ set -a && source .env && set +a
 
 ## 🚀 How to Run
 
-Evaluations are launched with `run/eval.py`. The four scenarios differ only in the `--mode`,
+Evaluations are launched with `eval.py`. The four scenarios differ only in the `--mode`,
 `--attack_name`, and `--defense_name` arguments:
 
 | Scenario                                  | `--mode`       | `--attack_name`          | `--defense_name` |
@@ -122,7 +122,7 @@ instead, set `LOCAL_BASE_URL` (see [API Keys](#-api-keys)) and replace
 ### 1) Important Instr. attack + IPIGuard defense
 
 ```bash
-python3 run/eval.py \
+python3 eval.py \
     --suite_name travel \
     --agent_model Llama-3.3-70B-Instruct \
     --attack_name important_instructions \
@@ -134,7 +134,7 @@ python3 run/eval.py \
 ### 2) No attack + IPIGuard defense
 
 ```bash
-python3 run/eval.py \
+python3 eval.py \
     --suite_name travel \
     --agent_model claude-sonnet-4-5-20250929 \
     --attack_name important_instructions \
@@ -146,7 +146,7 @@ python3 run/eval.py \
 ### 3) Important Instr. attack + original model (no defense)
 
 ```bash
-python3 run/eval.py \
+python3 eval.py \
     --suite_name travel \
     --agent_model claude-sonnet-4-5-20250929 \
     --attack_name important_instructions \
@@ -159,7 +159,7 @@ python3 run/eval.py \
 ### 4) No attack + original model (no defense)
 
 ```bash
-python3 run/eval.py \
+python3 eval.py \
     --suite_name travel \
     --agent_model claude-sonnet-4-5-20250929 \
     --attack_name important_instructions \
