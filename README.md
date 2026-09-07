@@ -99,106 +99,48 @@ set -a && source .env && set +a
 
 ## 🚀 How to Run
 
-Evaluations are launched with `eval.py`. The four scenarios differ only in the `--mode`,
-`--attack_name`, and `--defense_name` arguments:
-
-| Scenario                                  | `--mode`       | `--attack_name`          | `--defense_name` |
-|-------------------------------------------|----------------|--------------------------|------------------|
-| Important Instr. attack **+ IPIGuard**    | `under_attack` | `important_instructions` | `ipiguard`       |
-| No attack **+ IPIGuard**                  | `benign`       | `important_instructions` | `ipiguard`       |
-| Important Instr. attack **+ original model** | `under_attack` | `important_instructions` | `None`           |
-| No attack **+ original model**            | `benign`       | `important_instructions` | `None`           |
-
-In `benign` mode the attack is not injected, so `--attack_name` is ignored for utility — any valid value
-(e.g. `important_instructions`) is fine. `--defense_name None` runs the **original model** with no defense.
-
-All examples below use the agent model **`anthropic:claude-sonnet-4-5-20250929`** and the `travel` suite.
-Swap `--suite_name` for any AgentDojo suite (`workspace`, `slack`, `banking`, `travel`) or AgentDyn
-suite (`shopping`, `github`, `dailylife`), or use a group: `all` (the four AgentDojo suites),
-`agentdyn` (the three AgentDyn suites), or `everything` (all seven). To run on a local model
-instead, set `LOCAL_BASE_URL` (see [API Keys](#-api-keys)) and replace
-`--agent_model claude-sonnet-4-5-20250929` with `--agent_model Qwen3.6-35B-A3B`.
-
-### 1) Important Instr. attack + IPIGuard defense
+Evaluations are launched with `main.py`. The model is a positional argument; `--run-attack` turns the
+adversarial run on (omit it for the benign, no-attack run). Results always go under `logs/`.
 
 ```bash
-python3 eval.py \
-    --suite_name travel \
-    --agent_model Llama-3.3-70B-Instruct \
-    --attack_name important_instructions \
-    --defense_name ipiguard \
-    --mode under_attack \
-    --output_dir logs/ \
+# Under attack (IPIGuard defense):
+python3 main.py Qwen3.6-35B-A3B --run-attack \
+    --attack important_instructions \
+    --suites banking slack travel workspace \
+    --defense ipiguard
+
+# No attack (benign) — same, minus --run-attack/--attack:
+python3 main.py Qwen3.6-35B-A3B \
+    --suites banking slack travel workspace \
+    --defense ipiguard
 ```
 
-### 2) No attack + IPIGuard defense
-
-```bash
-python3 eval.py \
-    --suite_name travel \
-    --agent_model claude-sonnet-4-5-20250929 \
-    --attack_name important_instructions \
-    --defense_name ipiguard \
-    --mode benign \
-    --output_dir logs/ \
-```
-
-### 3) Important Instr. attack + original model (no defense)
-
-```bash
-python3 eval.py \
-    --suite_name travel \
-    --agent_model claude-sonnet-4-5-20250929 \
-    --attack_name important_instructions \
-    --defense_name None \
-    --mode under_attack \
-    --output_dir evaluation_results/attack_original \
-    --uid 0 --iid 0
-```
-
-### 4) No attack + original model (no defense)
-
-```bash
-python3 eval.py \
-    --suite_name travel \
-    --agent_model claude-sonnet-4-5-20250929 \
-    --attack_name important_instructions \
-    --defense_name None \
-    --mode benign \
-    --output_dir evaluation_results/benign_original \
-    --uid 0 --iid 0
-```
+- **MODEL** (positional): hosted (`claude-sonnet-4-5-20250929`, `gpt-4o-mini-2024-07-18`) or local via an
+  OpenAI-compatible server (`Qwen3.6-35B-A3B`, or `local:Qwen3.6-35B-A3B`; set `LOCAL_BASE_URL`, see
+  [API Keys](#-api-keys)).
+- `--defense None` runs the **original model** with no defense; `--defense ipiguard` runs the proposed
+  defense.
+- `--suites` takes any AgentDojo suite (`banking slack travel workspace`) and/or AgentDyn suite
+  (`shopping github dailylife`), or a group: `all` (AgentDojo 4), `agentdyn` (3), `everything` (all 7).
 
 ### Using the shell script
 
-`eval.sh` wraps a single configuration with a fixed `logs/` output dir, so interrupted runs resume
-where they left off (completed trace JSONs are skipped). Edit the variables at the top and run it:
-
-```bash
-# inside eval.sh
-agent_model="local:Qwen3.6-35B-A3B"
-attack_name="important_instructions"
-defense_name="ipiguard"          # or "None" for the original model
-suite_name="all"                 # or "agentdyn" / "everything" / a single suite
-mode="under_attack"              # or "benign"
-```
-
-```bash
-bash eval.sh
-```
+`eval.sh` wraps a single configuration (fixed `logs/` output, so interrupted runs resume — completed
+trace JSONs are skipped). Edit the variables at the top and run `bash eval.sh`.
 
 ### Argument reference
 
 | Argument          | Description                                                                                       |
 |-------------------|---------------------------------------------------------------------------------------------------|
-| `--agent_model`   | Agent model used for evaluation (e.g. `claude-sonnet-4-5-20250929`, `gpt-4o-mini-2024-07-18`, `Llama-3.3-70B-Instruct`). |
-| `--attack_name`   | Adversarial attack to simulate. `important_instructions` (default), or [ChatInject](https://github.com/hwanchang00/ChatInject) chat-template attacks: `chat_inject_qwen3` / `chat_inject_glm` (single-turn), and their `_with_utility_system_multiturn_7` / `_with_utility_authority_endorsement_system_multiturn_7` variants. Ignored in `benign` mode. |
-| `--defense_name`  | Defense strategy: `ipiguard` for the proposed defense, or `None` for the original (undefended) model. |
-| `--suite_name`    | Task suite/domain: `travel`, `workspace`, `slack`, `banking` (AgentDojo); `shopping`, `github`, `dailylife` (AgentDyn); or a group: `all` (AgentDojo), `agentdyn`, `everything`. |
-| `--benchmark_version` | Suite version (default `v1.2`). The AgentDyn suites are unversioned and available under every version. |
-| `--mode`          | `benign` → standard tasks without attacks; `under_attack` → adversarial tasks with injected attacks. |
-| `--output_dir`    | Directory to store evaluation results (JSON logs + per-suite ASR/Utility).                          |
-| `--uid` / `--iid` | Debug filters: run only the given user-task / injection-task ID.                                    |
+| `MODEL` (positional) | Agent model, e.g. `claude-sonnet-4-5-20250929`, `gpt-4o-mini-2024-07-18`, `Qwen3.6-35B-A3B`, `local:Qwen3.6-35B-A3B`. |
+| `--run-attack`    | Run under attack. Omit for the benign (no-attack) run.                                              |
+| `--attack`        | Adversarial attack to simulate (only with `--run-attack`). `important_instructions` (default), or [ChatInject](https://github.com/hwanchang00/ChatInject): `chat_inject_qwen3` / `chat_inject_glm` (single-turn) and their `_with_utility_system_multiturn_7` / `_with_utility_authority_endorsement_system_multiturn_7` variants. |
+| `--defense`       | `ipiguard` for the proposed defense, or `None` for the original (undefended) model.                |
+| `--suites`        | Space-separated suites: `banking slack travel workspace` (AgentDojo); `shopping github dailylife` (AgentDyn); or a group: `all`, `agentdyn`, `everything`. |
+| `--benchmark-version` | Suite version (default `v1.2`). The AgentDyn suites are unversioned and available under every version. |
+| `--output_dir`    | Output directory (default `logs/`). JSON logs + per-suite ASR/Utility.                              |
+| `-ut` / `--user-task` | Debug: run only the given user-task id(s), repeatable (`-ut 0 -ut 3`).                          |
+| `-it` / `--injection-task` | Debug: run only the given injection-task id(s), repeatable (`-it 1`).                      |
 | `--force_rerun`   | Rerun tasks even when a completed trace JSON already exists in `output_dir` (by default completed tasks are skipped and their recorded results reused). |
 | `--html`          | Also write a rendered `<task>.html` next to each `<task>.json` trace (pre-plan, committed DAG, runtime tool-call gating, message stream). Off by default. |
 

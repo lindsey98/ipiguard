@@ -1,20 +1,19 @@
 #!/bin/bash
-agent_model="local:Qwen3.6-35B-A3B"
-attack_name="important_instructions"
-defense_name="ipiguard"          # use "None" to run the original model (no defense)
-suite_name="agentdyn"                 # "all"=AgentDojo 4, "agentdyn"=shopping/github/dailylife, "everything"=all 7
-# mode="under_attack"              # "benign" for no-attack runs
-mode="benign"              # "benign" for no-attack runs
+model="local:Qwen3.6-35B-A3B"
+suites="banking slack travel workspace"   # or: shopping github dailylife / all / agentdyn / everything
+defense="ipiguard"                        # "None" for the original model, or "ipiguard"
+attack="important_instructions"
 
-output_dir="logs/"
+# --- benign (no attack): drop --run-attack ---
+python3 main.py "$model" \
+    --suites $suites \
+    --defense "$defense"
 
-mkdir -p "$output_dir"
+# --- under attack: add --run-attack --attack <name> ---
+# python3 main.py "$model" \
+#     --run-attack --attack "$attack" \
+#     --suites $suites \
+#     --defense "$defense"
 
-python3 eval.py \
-    --suite_name "$suite_name" \
-    --agent_model "$agent_model" \
-    --attack_name "$attack_name" \
-    --defense_name "$defense_name" \
-    --output_dir "$output_dir" \
-    --mode "$mode"
-# Add --html True to also write a rendered <task>.html next to each <task>.json trace.
+# Output always goes under logs/. Add --html to also write a rendered <task>.html per trace.
+# Debug a single task with -ut <id> (and -it <id> under attack).

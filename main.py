@@ -1,7 +1,6 @@
 from dotenv import load_dotenv
-from dataclasses import dataclass, field
-from transformers import HfArgumentParser
 from typing import Any, Optional, Union, List
+import argparse
 import json
 import os
 import time
@@ -116,44 +115,61 @@ class AgentTask:
 
         return int(security), int(utility), messages, args
 
-@dataclass
-class ScriptArguments:
-    output_dir: Optional[str] = field(
-        default="eval_logs/", metadata={"help": "directory to save the eval log"}
-    )
-    # agent parameters
-    benchmark_version: Optional[str] = field(
-        default="v1.2", metadata={"help": "the benchmark version"}
-    )
-    suite_name: Optional[List[str]] = field(
-        default_factory=lambda: ["workspace","slack", "travel", "banking"], 
-        metadata={"help": "the suite name, can be banking, workspace, slack or travel. Multiple values can be provided."}
-    )
-    attack_name: Optional[str] = field(
-        default="important_instructions", metadata={"help": "the name of attack method"}
-    )
-    defense_name: Optional[str] = field(
-        default="ipiguard", metadata={"help": "the name of defense method"}
-    )
-    agent_model: Optional[str] = field(
-        default="gpt-3.5-turbo-0125", metadata={"help": "the name of the model used for the agent's brain"}
-    )
-    mode: Optional[str] = field(
-        default="under_attack", metadata={"help": " 'benign' or 'under_attack' "}
-    )
-    uid: Optional[int] = field(
-        default=None, metadata={"help": "debug only: run a single user-task id; run all tasks if unset"}
-    )
-    iid: Optional[int] = field(
-        default=None, metadata={"help": "debug only: run a single injection-task id; run all if unset"}
-    )
-    force_rerun: Optional[bool] = field(
-        default=False, metadata={"help": "if True, rerun even if output already exists"}
-    )
-    html: Optional[bool] = field(
-        default=False,
-        metadata={"help": "if True, also write a rendered .html next to each .json trace"},
-    )
+def parse_args():
+    """Command-line interface.
+
+    With attack:
+        python main.py MODEL --run-attack --attack important_instructions \\
+            --suites banking slack travel workspace --defense ipiguard
+    Without attack (benign):
+        python main.py MODEL --suites banking slack travel workspace --defense ipiguard
+
+    MODEL is positional (e.g. Qwen3.6-35B-A3B, or local:Qwen3.6-35B-A3B, gpt-4o-mini-...).
+    Output always goes under logs/ unless --output_dir is given.
+    """
+    p = argparse.ArgumentParser(description="Run the IPIGuard / AgentDojo evaluation.")
+    p.add_argument("agent_model", help="agent model, e.g. Qwen3.6-35B-A3B or local:Qwen3.6-35B-A3B")
+    p.add_argument("--run-attack", dest="run_attack", action="store_true",
+                   help="run under attack (omit for the benign, no-attack run)")
+    p.add_argument("--attack", dest="attack_name", default="important_instructions",
+                   help="attack name (only used with --run-attack), e.g. important_instructions")
+    p.add_argument("--suites", dest="suite_name", nargs="+",
+                   default=["banking", "slack", "travel", "workspace"],
+                   help="suites to run: banking slack travel workspace shopping github dailylife, "
+                        "or a group: all / agentdyn / everything")
+    p.add_argument("--defense", dest="defense_name", default="ipiguard",
+                   help="defense: None (original model) or ipiguard")
+    p.add_argument("--output_dir", dest="output_dir", default="logs/",
+                   help="output directory (default logs/)")
+    p.add_argument("--benchmark-version", dest="benchmark_version", default="v1.2",
+                   help="benchmark suite version (default v1.2)")
+    p.add_argument("-ut", "--user-task", dest="user_tasks", action="append", default=None,
+                   help="user task(s) to run, repeatable (e.g. -ut 0 -ut 3 or -ut user_task_0). "
+                        "If omitted, all user tasks in the suite are run.")
+    p.add_argument("-it", "--injection-task", dest="injection_tasks", action="append", default=None,
+                   help="injection task(s) to run, repeatable (e.g. -it 1 or -it injection_task_1). "
+                        "If omitted, all injection tasks in the suite are run.")
+    p.add_argument("--force_rerun", dest="force_rerun", action="store_true",
+                   help="rerun tasks even if a completed trace JSON already exists")
+    p.add_argument("--html", action="store_true",
+                   help="also write a rendered .html next to each .json trace")
+    args = p.parse_args()
+    args.mode = "under_attack" if args.run_attack else "benign"
+    args.user_tasks = tuple(args.user_tasks or ())
+    args.injection_tasks = tuple(args.injection_tasks or ())
+    return args
+
+
+def _id_selected(selected: tuple, current_int: int, prefix: str) -> bool:
+    """True if current task id passes the debug filter (empty selection = run all).
+
+    Accepts both bare ids ("3") and full ids ("user_task_3" / "injection_task_3").
+    """
+    if not selected:
+        return True
+    norm = {str(s).replace(prefix, "") for s in selected}
+    return str(current_int) in norm
+
 
 def _cached_result(script_args, pipeline_name, suite_name, user_task_id, attack_type, injection_task_id):
     """Return (task_reward, utility) from an existing trace JSON, or None to (re)run.
@@ -199,8 +215,8 @@ def benign_eval(script_args, agent_pipeline, suite, agent_test_dataset, pipeline
     security = 0
     useful = 0
     for user_task_id in tqdm(agent_test_dataset, desc="Evaluating on the test dataset"):
-        # uid is a debugging filter: when unset, run every user task.
-        if script_args.uid is not None and user_task_id != script_args.uid:
+        # --user-task is a debugging filter: when unset, run every user task.
+        if not _id_selected(script_args.user_tasks, user_task_id, "user_task_"):
             continue
         user_task_to_run = suite.get_user_task_by_id(f"user_task_{user_task_id}")
 
@@ -235,8 +251,8 @@ def benign_eval(script_args, agent_pipeline, suite, agent_test_dataset, pipeline
 
     if sum == 0:
         raise ValueError(
-            f"No tasks matched in suite '{suite.name}' (uid={script_args.uid}, iid={script_args.iid}); "
-            "check the --uid/--iid debug filters."
+            f"No tasks matched in suite '{suite.name}' (user_tasks={script_args.user_tasks}); "
+            "check the --user-task/-ut debug filter."
         )
     asr = security * 100 / sum
     ability = useful * 100 / sum
@@ -251,10 +267,10 @@ def eval(script_args, agent_pipeline, suite, attacker, agent_test_dataset, pipel
     useful = 0
 
     for user_task_id, injection_task_id in tqdm(agent_test_dataset, desc="Evaluating on the test dataset"):
-        # uid/iid are debugging filters: when unset, run every (task, injection) pair.
-        if script_args.uid is not None and user_task_id != script_args.uid:
+        # --user-task / --injection-task are debugging filters: when unset, run every pair.
+        if not _id_selected(script_args.user_tasks, user_task_id, "user_task_"):
             continue
-        if script_args.iid is not None and injection_task_id != script_args.iid:
+        if not _id_selected(script_args.injection_tasks, injection_task_id, "injection_task_"):
             continue
 
         user_task_to_run = suite.get_user_task_by_id(f"user_task_{user_task_id}")
@@ -296,7 +312,7 @@ def eval(script_args, agent_pipeline, suite, attacker, agent_test_dataset, pipel
 
     if sum == 0:
         raise ValueError(
-            f"No (task, injection) pairs matched in suite '{suite.name}' (uid={script_args.uid}, iid={script_args.iid}); "
+            f"No (task, injection) pairs matched in suite '{suite.name}' (user_tasks={script_args.user_tasks}, injection_tasks={script_args.injection_tasks}); "
             "check the --uid/--iid debug filters."
         )
     asr = security * 100 / sum
@@ -306,8 +322,7 @@ def eval(script_args, agent_pipeline, suite, attacker, agent_test_dataset, pipel
 
 if __name__ == '__main__':
     load_dotenv()
-    parser = HfArgumentParser(ScriptArguments)
-    script_args: ScriptArguments = parser.parse_args_into_dataclasses()[0]
+    script_args = parse_args()
 
     # opt-in HTML trace rendering (TraceLogger.save reads this env var)
     if script_args.html:
