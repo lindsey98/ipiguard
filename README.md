@@ -77,7 +77,7 @@ conda activate ipiguard
 
 # install the unified agentdojo package (includes the IPIGuard defense, the AgentDyn
 # suites — shopping, github, dailylife — and the data-only / ChatInject attacks).
-pip install "git+https://github.com/lindsey98/agentdojo@ipiguard-integration"
+pip install "git+https://github.com/lindsey98/agentdojo@main"
 ```
 
 > The agentdojo backend now lives in its own repo
