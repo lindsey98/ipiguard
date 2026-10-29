@@ -21,6 +21,12 @@ from agentdojo.agent_pipeline.llms.ipiguard_llm import MalformedModelOutputError
 from agentdojo.functions_runtime import FunctionCall
 from data_module import AGENTDOJO_SUITES, AGENTDYN_SUITES, initialize_dataset
 from tqdm import tqdm
+
+# Count EVERY call's tokens (agent + all DAG/defense nodes) into each record's prompt_tokens/
+# completion_tokens/total_tokens -- see token_meter.py. (IPIGuard also writes input_tokens/output_tokens
+# via its own extra_args; these are an independent, always-complete cross-check.)
+import token_meter
+token_meter.install()
 # Per-task logging is handled by AgentDojo's TraceLogger (see benign_eval/eval).
 
 class AgentTask:
